@@ -318,6 +318,8 @@ def startup():
     t.start()
     print("[Startup] Fetcher thread started.")
 
+# Run startup always — works for both `python app.py` and gunicorn
+startup()
+
 if __name__ == "__main__":
-    startup()
     app.run(host="0.0.0.0", port=5000, debug=False)
