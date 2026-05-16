@@ -463,8 +463,9 @@ function buildUI(pred, stats, history) {
     </div>`;
   }).join('');
 
-  // Recent played results
-  const resultRows = ((stats.recent_played)||[]).slice().reverse().slice(0,8).map(r => {
+  // Live log — ONLY real PLAY rounds where result is confirmed
+  // SKIP rounds never appear here
+  const liveRows = ((stats.live_log)||[]).slice().reverse().slice(0,10).map(r => {
     const ac = CLASS_COLORS[r.actual];
     const p1col = CLASS_COLORS[r.top2[0]];
     const p2col = CLASS_COLORS[r.top2[1]];
@@ -595,9 +596,9 @@ function buildUI(pred, stats, history) {
   </div>
 
   <!-- RECENT RESULTS -->
-  ${resultRows ? `<div class="card">
-    <div class="card-title">Recent Predictions</div>
-    <div class="results-list">${resultRows}</div>
+  ${liveRows ? `<div class="card">
+    <div class="card-title">Live Results (PLAY rounds only)</div>
+    <div class="results-list">${liveRows}</div>
   </div>` : ''}
 
   <div style="text-align:center;font-size:11px;color:var(--muted);padding:16px 0">
