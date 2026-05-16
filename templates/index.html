@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>StarMaker Treasure Predictor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #080c14;
+    --bg2:       #0d1422;
+    --bg3:       #111928;
+    --border:    rgba(99,179,237,0.12);
+    --accent:    #63b3ed;
+    --gold:      #f6c90e;
+    --green:     #22c55e;
+    --red:       #ef4444;
+    --text:      #e2e8f0;
+    --muted:     #64748b;
+    --radius:    16px;
+    --glow:      0 0 20px rgba(99,179,237,0.25);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated BG */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99,179,237,0.07) 0%, transparent 70%),
+      radial-gradient(ellipse 50% 50% at 80% 100%, rgba(168,85,247,0.05) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  main { position: relative; z-index: 1; max-width: 480px; margin: 0 auto; padding: 16px 12px 40px; }
+
+  /* ── HEADER ── */
+  header {
+    text-align: center;
+    padding: 24px 0 20px;
+  }
+  .logo {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(18px, 5vw, 26px);
+    font-weight: 900;
+    letter-spacing: 2px;
+    background: linear-gradient(135deg, var(--accent), #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 4px;
+  }
+  .logo-sub { font-size: 11px; color: var(--muted); letter-spacing: 3px; text-transform: uppercase; }
+
+  /* Status pill */
+  .status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 12px;
+    backdrop-filter: blur(8px);
+  }
+  .card-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── MAIN PREDICTION CARD ── */
+  .pred-card {
+    background: linear-gradient(135deg, #0d1422 0%, #111928 100%);
+    border: 1px solid rgba(99,179,237,0.2);
+    border-radius: 20px;
+    padding: 24px 20px;
+    margin-bottom: 12px;
+    position: relative;
+    overflow: hidden;
+  }
+  .pred-card::before {
+    content: '';
+    position: absolute;
+    top: -40px; right: -40px;
+    width: 160px; height: 160px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(99,179,237,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .round-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(99,179,237,0.1);
+    border: 1px solid rgba(99,179,237,0.2);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: var(--accent);
+    font-family: 'Orbitron', monospace;
+    letter-spacing: 1px;
+    margin-bottom: 16px;
+  }
+
+  /* ACTION banner */
+  .action-banner {
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 600;
+    font-size: 16px;
+    transition: all 0.4s;
+  }
+  .action-banner.play {
+    background: linear-gradient(135deg, rgba(34,197,94,0.15), rgba(34,197,94,0.05));
+    border: 1px solid rgba(34,197,94,0.3);
+    color: var(--green);
+  }
+  .action-banner.skip {
+    background: linear-gradient(135deg, rgba(239,68,68,0.15), rgba(239,68,68,0.05));
+    border: 1px solid rgba(239,68,68,0.25);
+    color: var(--red);
+  }
+  .action-icon { font-size: 22px; }
+  .action-detail { font-size: 11px; font-weight: 400; color: var(--muted); margin-top: 2px; }
+
+  /* TOP-2 PICKS */
+  .picks-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .pick-box {
+    border-radius: 14px;
+    padding: 16px 12px;
+    text-align: center;
+    position: relative;
+    border: 2px solid;
+    transition: transform 0.2s;
+  }
+  .pick-box:active { transform: scale(0.97); }
+  .pick-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; opacity: 0.7; margin-bottom: 6px; }
+  .pick-num {
+    font-family: 'Orbitron', monospace;
+    font-size: 32px;
+    font-weight: 900;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .pick-name { font-size: 13px; font-weight: 500; }
+  .pick-conf { font-size: 11px; opacity: 0.6; margin-top: 4px; }
+  .pick-rank {
+    position: absolute;
+    top: 8px; left: 10px;
+    font-size: 9px;
+    letter-spacing: 1px;
+    opacity: 0.5;
+    font-family: 'Orbitron', monospace;
+  }
+
+  /* Confidence bar */
+  .conf-section { margin-top: 4px; }
+  .conf-label { font-size: 11px; color: var(--muted); margin-bottom: 8px; display: flex; justify-content: space-between; }
+  .conf-bar-wrap { background: rgba(255,255,255,0.05); border-radius: 6px; height: 6px; overflow: hidden; margin-bottom: 8px; }
+  .conf-bar-fill { height: 100%; border-radius: 6px; transition: width 0.6s ease; }
+
+  /* ── SCORE GRID ── */
+  .score-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .score-item {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .score-item.highlighted { border-color: rgba(99,179,237,0.4); }
+  .score-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .score-info { flex: 1; min-width: 0; }
+  .score-name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .score-pct { font-size: 11px; color: var(--muted); }
+  .score-bar-wrap { width: 36px; flex-shrink: 0; }
+  .score-mini-bar { height: 4px; border-radius: 2px; margin-top: 2px; }
+
+  /* ── HISTORY ── */
+  .history-scroll {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scrollbar-width: none;
+  }
+  .history-scroll::-webkit-scrollbar { display: none; }
+  .hist-item {
+    flex-shrink: 0;
+    width: 44px; height: 44px;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255,255,255,0.08);
+    gap: 2px;
+  }
+  .hist-num { font-family: 'Orbitron', monospace; font-size: 14px; font-weight: 700; }
+  .hist-rnd { font-size: 8px; color: rgba(255,255,255,0.35); }
+
+  /* ── STATS GRID ── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .stat-box {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 12px;
+    text-align: center;
+  }
+  .stat-val {
+    font-family: 'Orbitron', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1;
+  }
+  .stat-val.good { color: var(--green); }
+  .stat-val.warn { color: var(--gold); }
+  .stat-label { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  /* ── RECENT RESULTS ── */
+  .results-list { display: flex; flex-direction: column; gap: 6px; }
+  .result-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg3);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+  .result-round { color: var(--muted); font-size: 11px; width: 50px; flex-shrink: 0; font-family: 'Orbitron', monospace; }
+  .result-pred { display: flex; gap: 4px; flex: 1; }
+  .mini-tag {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px;
+    border-radius: 6px;
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .result-actual { display: flex; align-items: center; gap: 4px; }
+  .result-badge {
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .hit-badge { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+  .miss-badge { background: rgba(239,68,68,0.12); color: var(--red); border: 1px solid rgba(239,68,68,0.25); }
+
+  /* ── META INFO ── */
+  .meta-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--muted);
+    padding: 10px 0;
+    border-top: 1px solid var(--border);
+  }
+  .meta-val { color: var(--text); font-weight: 500; }
+
+  /* ── LOADING ── */
+  .loading {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+  }
+  .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── REFRESH BTN ── */
+  .refresh-btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%;
+    background: rgba(99,179,237,0.08);
+    border: 1px solid rgba(99,179,237,0.2);
+    border-radius: 12px;
+    padding: 14px;
+    color: var(--accent);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    margin-bottom: 12px;
+    transition: background 0.2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .refresh-btn:active { background: rgba(99,179,237,0.15); }
+  .refresh-icon { font-size: 16px; }
+
+  /* Countdown */
+  .countdown { font-size: 11px; color: var(--muted); text-align: center; margin-bottom: 16px; }
+
+  /* ── ENTROPY METER ── */
+  .entropy-wrap { margin-top: 12px; }
+  .entropy-track {
+    position: relative;
+    height: 8px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 6px 0;
+  }
+  .entropy-fill { height: 100%; border-radius: 4px; transition: width 0.6s; }
+  .entropy-mark {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: rgba(255,255,255,0.3);
+  }
+
+  /* Flash animation on update */
+  @keyframes flash { 0%{opacity:0.4} 50%{opacity:1} 100%{opacity:1} }
+  .updated { animation: flash 0.5s ease; }
+
+  /* Mobile tweaks */
+  @media (max-width: 360px) {
+    .picks-row { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .pick-num { font-size: 26px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="logo">⚡ TREASURE AI</div>
+    <div class="logo-sub">StarMaker Prediction Engine</div>
+    <div class="status-bar">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">Connecting...</span>
+    </div>
+  </header>
+
+  <div id="app">
+    <div class="loading">
+      <div class="spinner"></div>
+      <div>Loading prediction...</div>
+    </div>
+  </div>
+</main>
+
+<script>
+const CLASS_COLORS = {
+  1:"#a855f7",2:"#ef4444",3:"#f97316",
+  4:"#eab308",5:"#facc15",6:"#22c55e",
+  7:"#06b6d4",8:"#16a34a"
+};
+const CLASS_NAMES = {
+  1:"Purple",2:"10×",3:"25×",
+  4:"15×",5:"Yellow",6:"Lt. Green",
+  7:"50×",8:"Dk. Green"
+};
+
+let countdown = 5;
+let countdownEl;
+let lastRound = null;
+
+function fmt(n){ return n !== null && n !== undefined ? n : '—'; }
+
+function buildUI(pred, stats, history) {
+  const isPlay = pred.action === "PLAY";
+  const p1c = CLASS_COLORS[pred.pred1] || "#888";
+  const p2c = CLASS_COLORS[pred.pred2] || "#888";
+
+  // Score bars sorted
+  const sorted = Object.entries(pred.all_scores).sort((a,b)=>b[1]-a[1]);
+  const maxScore = sorted[0]?.[1] || 1;
+
+  const scoreRows = sorted.map(([idx, pct]) => {
+    const cls = parseInt(idx);
+    const color = CLASS_COLORS[cls];
+    const name  = CLASS_NAMES[cls];
+    const isPick = cls === pred.pred1 || cls === pred.pred2;
+    const w = Math.round(pct / maxScore * 100);
+    return `
+    <div class="score-item ${isPick ? 'highlighted' : ''}">
+      <div class="score-dot" style="background:${color}"></div>
+      <div class="score-info">
+        <div class="score-name">${name}</div>
+        <div class="score-pct">${pct.toFixed(1)}%</div>
+      </div>
+      <div class="score-bar-wrap">
+        <div class="score-mini-bar" style="background:${color};width:${w}%;opacity:${isPick?1:0.4}"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // History items
+  const histItems = (history||[]).slice(0,20).map(h => {
+    const c = CLASS_COLORS[h.reward_index];
+    return `<div class="hist-item" style="background:${c}18;border-color:${c}40">
+      <div class="hist-num" style="color:${c}">${h.reward_index}</div>
+      <div class="hist-rnd">#${h.round}</div>
+    </div>`;
+  }).join('');
+
+  // Recent played results
+  const resultRows = ((stats.recent_played)||[]).slice().reverse().slice(0,8).map(r => {
+    const ac = CLASS_COLORS[r.actual];
+    const p1col = CLASS_COLORS[r.top2[0]];
+    const p2col = CLASS_COLORS[r.top2[1]];
+    return `<div class="result-row">
+      <div class="result-round">#${r.round}</div>
+      <div class="result-pred">
+        <div class="mini-tag" style="background:${p1col}22;color:${p1col};border:1px solid ${p1col}50">${r.top2[0]}</div>
+        <div class="mini-tag" style="background:${p2col}22;color:${p2col};border:1px solid ${p2col}50">${r.top2[1]}</div>
+      </div>
+      <div class="result-actual">
+        <div class="mini-tag" style="background:${ac}22;color:${ac};border:1px solid ${ac}50">${r.actual}</div>
+        <span class="result-badge ${r.hit ? 'hit-badge' : 'miss-badge'}">${r.hit ? '✓ HIT' : '✗ MISS'}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Entropy meter (0–3 scale)
+  const entPct = Math.min(100, (pred.entropy / 3.0) * 100);
+  const entColor = pred.entropy < 2.0 ? '#22c55e' : pred.entropy < 2.7 ? '#eab308' : '#ef4444';
+  const threshPct = (2.70 / 3.0) * 100;
+
+  // Accuracy color
+  const accColor = (stats.accuracy||0) >= 60 ? 'good' : 'warn';
+
+  const html = `
+  <!-- MAIN PREDICTION -->
+  <div class="pred-card updated">
+    <div class="round-badge">
+      <span>●</span> ROUND ${fmt(pred.next_round)}
+    </div>
+
+    <div class="action-banner ${isPlay ? 'play' : 'skip'}">
+      <div class="action-icon">${isPlay ? '✅' : '⏭'}</div>
+      <div>
+        <div>${isPlay ? 'PLAY THIS ROUND' : 'SKIP THIS ROUND'}</div>
+        ${!isPlay && pred.skip_reason ? `<div class="action-detail">${pred.skip_reason}</div>` : ''}
+        ${isPlay ? `<div class="action-detail">Bet on either prediction below</div>` : ''}
+      </div>
+    </div>
+
+    <div class="picks-row">
+      <div class="pick-box" style="border-color:${p1c}60;background:${p1c}10">
+        <div class="pick-rank">PICK 1</div>
+        <div class="pick-num" style="color:${p1c}">${pred.pred1}</div>
+        <div class="pick-name" style="color:${p1c}">${pred.pred1_name}</div>
+        <div class="pick-conf">${pred.pred1_conf.toFixed(1)}% conf</div>
+      </div>
+      <div class="pick-box" style="border-color:${p2c}60;background:${p2c}10">
+        <div class="pick-rank">PICK 2</div>
+        <div class="pick-num" style="color:${p2c}">${pred.pred2}</div>
+        <div class="pick-name" style="color:${p2c}">${pred.pred2_name}</div>
+        <div class="pick-conf">${pred.pred2_conf.toFixed(1)}% conf</div>
+      </div>
+    </div>
+
+    <!-- Entropy -->
+    <div class="entropy-wrap">
+      <div class="conf-label">
+        <span>Model Entropy</span>
+        <span style="color:${entColor}">${pred.entropy}</span>
+      </div>
+      <div class="entropy-track">
+        <div class="entropy-fill" style="width:${entPct}%;background:${entColor}"></div>
+        <div class="entropy-mark" style="left:${threshPct}%"></div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);display:flex;justify-content:space-between">
+        <span>0 (certain)</span><span style="color:rgba(255,255,255,0.3)">▲ threshold</span><span>3 (random)</span>
+      </div>
+    </div>
+
+    <!-- Meta -->
+    <div class="meta-row" style="margin-top:14px">
+      <span>Latest Round</span><span class="meta-val">#${fmt(pred.latest_round)}</span>
+    </div>
+    <div class="meta-row">
+      <span>Total Data</span><span class="meta-val">${fmt(pred.total_rounds)} rounds</span>
+    </div>
+  </div>
+
+  <!-- REFRESH -->
+  <button class="refresh-btn" onclick="refreshAll()">
+    <span class="refresh-icon">↻</span> Refresh Prediction
+  </button>
+  <div class="countdown" id="countdown">Auto-refresh in <b id="cdNum">5</b>s</div>
+
+  <!-- SCORE BREAKDOWN -->
+  <div class="card">
+    <div class="card-title">Score Breakdown</div>
+    <div class="score-grid">${scoreRows}</div>
+  </div>
+
+  <!-- LAST 10 -->
+  <div class="card">
+    <div class="card-title">Recent History</div>
+    <div class="history-scroll">${histItems}</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px;text-align:right">← scroll for more</div>
+  </div>
+
+  <!-- STATS -->
+  <div class="card">
+    <div class="card-title">Simulation Stats</div>
+    <div class="stats-grid">
+      <div class="stat-box">
+        <div class="stat-val ${accColor}">${fmt(stats.accuracy)}%</div>
+        <div class="stat-label">Accuracy</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val">${fmt(stats.play_pct)}%</div>
+        <div class="stat-label">Play Rate</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val good">${fmt(stats.hits)}</div>
+        <div class="stat-label">Hits</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val" style="color:var(--red)">${fmt(stats.misses)}</div>
+        <div class="stat-label">Misses</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val">${fmt(stats.played)}</div>
+        <div class="stat-label">Rounds Played</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val warn">${fmt(stats.max_loss)}</div>
+        <div class="stat-label">Max Loss Streak</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RECENT RESULTS -->
+  ${resultRows ? `<div class="card">
+    <div class="card-title">Recent Predictions</div>
+    <div class="results-list">${resultRows}</div>
+  </div>` : ''}
+
+  <div style="text-align:center;font-size:11px;color:var(--muted);padding:16px 0">
+    Predictions are probabilistic. Not financial advice.
+  </div>`;
+
+  document.getElementById('app').innerHTML = html;
+  countdownEl = document.getElementById('cdNum');
+
+  // Check if new round
+  if (lastRound && pred.latest_round > lastRound) {
+    document.querySelector('.pred-card').style.boxShadow = '0 0 30px rgba(99,179,237,0.3)';
+    setTimeout(() => {
+      const el = document.querySelector('.pred-card');
+      if (el) el.style.boxShadow = '';
+    }, 2000);
+  }
+  lastRound = pred.latest_round;
+}
+
+async function refreshAll() {
+  try {
+    document.getElementById('statusDot').style.background = '#eab308';
+    const [predRes, statsRes, histRes] = await Promise.all([
+      fetch('/api/predict'),
+      fetch('/api/stats'),
+      fetch('/api/history')
+    ]);
+    if (!predRes.ok) throw new Error('Not ready');
+    const pred    = await predRes.json();
+    const stats   = await statsRes.json();
+    const history = await histRes.json();
+    buildUI(pred, stats, history);
+    document.getElementById('statusDot').style.background = '#22c55e';
+    document.getElementById('statusText').textContent = `Round #${pred.latest_round} · Live`;
+    countdown = 5;
+  } catch(e) {
+    document.getElementById('statusDot').style.background = '#ef4444';
+    document.getElementById('statusText').textContent = 'Connection error';
+    console.error(e);
+  }
+}
+
+// Auto-refresh every 5s
+setInterval(() => {
+  countdown--;
+  if (countdownEl) countdownEl.textContent = Math.max(0, countdown);
+  if (countdown <= 0) {
+    countdown = 5;
+    refreshAll();
+  }
+}, 1000);
+
+// Initial load
+refreshAll();
+</script>
+</body>
+</html>
