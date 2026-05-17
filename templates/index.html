@@ -463,9 +463,9 @@ function buildUI(pred, stats, history) {
     </div>`;
   }).join('');
 
-  // Live log — ONLY real PLAY rounds where result is confirmed
-  // SKIP rounds never appear here
-  const liveRows = ((stats.live_log)||[]).slice().reverse().slice(0,10).map(r => {
+  // Recent played results
+  // live_log: ONLY real PLAY rounds — SKIP rounds never appear here
+  const resultRows = ((stats.live_log)||[]).slice().reverse().slice(0,10).map(r => {
     const ac = CLASS_COLORS[r.actual];
     const p1col = CLASS_COLORS[r.top2[0]];
     const p2col = CLASS_COLORS[r.top2[1]];
@@ -590,15 +590,31 @@ function buildUI(pred, stats, history) {
       </div>
       <div class="stat-box">
         <div class="stat-val warn">${fmt(stats.max_loss)}</div>
-        <div class="stat-label">Max Loss Streak</div>
+        <div class="stat-label">Max Loss (Sim)</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val ${(stats.live_cur_streak||0)>=3?'warn':''}">${fmt(stats.live_cur_streak||0)}</div>
+        <div class="stat-label">Current Streak</div>
       </div>
     </div>
   </div>
 
+  <!-- FETCH STATUS BANNER -->
+  ${status.status === 'error' ? `
+  <div style="background:#7f1d1d;border:1px solid #ef4444;border-radius:8px;padding:12px 16px;margin-bottom:12px;font-size:13px;">
+    <div style="color:#ef4444;font-weight:700;margin-bottom:4px;">⚠ API FETCH ERROR — Data may be stale!</div>
+    <div style="color:#fca5a5;">${status.last_error||'Unknown error'}</div>
+    <div style="color:#f87171;margin-top:4px;">Latest round in memory: #${status.latest_round||'?'} | Last attempt: ${status.last_attempt||'?'}</div>
+  </div>` : ''}
+  ${status.status === 'ok' || status.status === 'ok_no_new' ? `
+  <div style="background:#052e16;border:1px solid #16a34a;border-radius:8px;padding:8px 16px;margin-bottom:12px;font-size:12px;color:#4ade80;">
+    ✓ API Live | Latest round: #${status.latest_round||'?'} | Last fetch: ${status.last_success||'?'}
+  </div>` : ''}
+
   <!-- RECENT RESULTS -->
-  ${liveRows ? `<div class="card">
-    <div class="card-title">Live Results (PLAY rounds only)</div>
-    <div class="results-list">${liveRows}</div>
+  ${resultRows ? `<div class="card">
+    <div class="card-title">Live Results (PLAY only)</div>
+    <div class="results-list">${resultRows}</div>
   </div>` : ''}
 
   <div style="text-align:center;font-size:11px;color:var(--muted);padding:16px 0">
@@ -622,14 +638,16 @@ function buildUI(pred, stats, history) {
 async function refreshAll() {
   try {
     document.getElementById('statusDot').style.background = '#eab308';
-    const [predRes, statsRes, histRes] = await Promise.all([
+    const [predRes, statsRes, histRes, statusRes] = await Promise.all([
       fetch('/api/predict'),
       fetch('/api/stats'),
-      fetch('/api/history')
+      fetch('/api/history'),
+      fetch('/api/status')
     ]);
     if (!predRes.ok) throw new Error('Not ready');
     const pred    = await predRes.json();
     const stats   = await statsRes.json();
+    const status  = statusRes.ok ? await statusRes.json() : {};
     const history = await histRes.json();
     buildUI(pred, stats, history);
     document.getElementById('statusDot').style.background = '#22c55e';
