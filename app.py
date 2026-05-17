@@ -1,10 +1,10 @@
-import json, math, threading, time, os, requests
+import json, math, threading, time, requests
 from collections import defaultdict, Counter
 from flask import Flask, jsonify, render_template
 
 app = Flask(__name__)
 
-# ─── CONFIG — exact same as simulate_v3.py ────────────────────────────────────
+# ── CONFIG ────────────────────────────────────────────────────────────────────
 DATA_FILE              = "round_data.json"
 SKIP_TOP1_THRESHOLD    = 0.220
 SKIP_ENTROPY_THRESHOLD = 2.70
@@ -13,42 +13,30 @@ BRAKE_PAUSE            = 3
 TRAIN_ROUNDS           = 50
 POLL_INTERVAL          = 5
 
-CLASS_NAMES = {
-    1:"Purple", 2:"10x", 3:"25x",
-    4:"15x",   5:"Yellow", 6:"Lt. Green",
-    7:"50x",   8:"Dk. Green"
-}
-CLASS_COLORS = {
-    1:"#a855f7", 2:"#ef4444", 3:"#f97316",
-    4:"#eab308", 5:"#facc15", 6:"#22c55e",
-    7:"#06b6d4", 8:"#16a34a"
-}
+CLASS_NAMES  = {1:"Purple",2:"10x",3:"25x",4:"15x",5:"Yellow",6:"Lt. Green",7:"50x",8:"Dk. Green"}
+CLASS_COLORS = {1:"#a855f7",2:"#ef4444",3:"#f97316",4:"#eab308",5:"#facc15",6:"#22c55e",7:"#06b6d4",8:"#16a34a"}
 
-FETCH_BASE = "https://m.starmakerstudios.com/go-v1/ssc/2711/records?start_round="
+FETCH_BASE    = "https://m.starmakerstudios.com/go-v1/ssc/2711/records?start_round="
 FETCH_HEADERS = {
     'User-Agent': "sm/9.9.4/Android/13/google play/d48399ffafa2d343/wifi/en-IN/SM-M325F/10977524107285207///India",
-    'Accept': "application/json, text/plain, */*",
-    'Cookie': "PHPSESSID=pd6mapbqfhbk3e7argj51uh1ts; oauth_token=94le54aFnKy5CrbNzo7s903FOWniysVT"
+    'Accept':     "application/json, text/plain, */*",
+    'Cookie':     "PHPSESSID=pd6mapbqfhbk3e7argj51uh1ts; oauth_token=94le54aFnKy5CrbNzo7s903FOWniysVT"
 }
 
-# ─── GLOBAL STATE ─────────────────────────────────────────────────────────────
+# ── GLOBAL STATE ──────────────────────────────────────────────────────────────
 _lock         = threading.Lock()
-_rewards      = []      # oldest to newest (ascending by round number)
-_raw_rounds   = []      # full record objects from API
-_sim_stats    = {}      # simulation stats, rebuilt after every new fetch
-_brake_left   = 0       # live brake counter, synced from simulation end state
+_rewards      = []      # ascending: oldest→newest. rewards[0]=round1, rewards[-1]=latest
+_raw_rounds   = []
+_sim_stats    = {}
+_brake_left   = 0
+_fetch_status = {"last_attempt":None,"last_success":None,"last_error":None,"total_fetched":0,"status":"starting"}
+_live_log     = []
+_pending_pred = None
 
-# Live prediction tracking
-# Only PLAY rounds are ever added to _live_log.
-# SKIP rounds are completely ignored — never logged, never shown as hit/miss.
-_live_log     = []      # list of dicts: {round, top2, actual, hit, action:"PLAY"}
-_pending_pred = None    # last PLAY prediction waiting for its result
-                        # dict: {round: int, top2: [a, b]}
-
-# ─── FILE HELPERS ─────────────────────────────────────────────────────────────
+# ── FILE HELPERS ──────────────────────────────────────────────────────────────
 def _load_file():
     try:
-        with open(DATA_FILE, "r") as f:
+        with open(DATA_FILE) as f:
             data = json.load(f)
         if isinstance(data, list) and data:
             return sorted(data, key=lambda x: x["round"])
@@ -60,7 +48,7 @@ def _save_file(records):
     with open(DATA_FILE, "w") as f:
         json.dump(records, f, indent=2)
 
-# ─── FETCHER ──────────────────────────────────────────────────────────────────
+# ── FETCHER ───────────────────────────────────────────────────────────────────
 def fetch_new():
     existing = _load_file()
     known    = {r["round"] for r in existing}
@@ -72,7 +60,13 @@ def fetch_new():
             resp.raise_for_status()
             data = resp.json()
         except Exception as e:
-            print(f"[Fetcher] Error: {e}")
+            err = str(e)
+            if "403" in err or "401" in err:
+                err = "AUTH FAILED — Cookie expired! Update FETCH_HEADERS in app.py"
+            print(f"[Fetcher] {err}")
+            with _lock:
+                _fetch_status["last_error"] = err
+                _fetch_status["status"]     = "error"
             break
         records = data.get("list", [])
         if not records:
@@ -80,8 +74,7 @@ def fetch_new():
         fresh = []; overlap = False
         for r in records:
             rv = r.get("round")
-            if rv in known:
-                overlap = True; break
+            if rv in known: overlap = True; break
             fresh.append(r); known.add(rv)
         new_recs.extend(fresh)
         if overlap or not data.get("has_more") or not data.get("callback"):
@@ -98,51 +91,51 @@ def fetcher_loop():
     global _pending_pred
     while True:
         try:
+            with _lock:
+                _fetch_status["last_attempt"] = time.strftime("%H:%M:%S")
+                _fetch_status["status"]       = "fetching"
             count, records = fetch_new()
-            if count > 0:
-                rewards = [r["reward_index"] for r in records]
+            with _lock:
+                if count > 0:
+                    _fetch_status["last_success"] = time.strftime("%H:%M:%S")
+                    _fetch_status["total_fetched"] += count
+                    _fetch_status["last_error"]   = None
+                    _fetch_status["status"]       = "ok"
+                else:
+                    _fetch_status["status"] = "ok_no_new"
 
+            if count > 0:
+                # rewards = ascending (oldest→newest), same as we always use
+                rewards = [r["reward_index"] for r in records]
                 with _lock:
                     _raw_rounds.clear(); _raw_rounds.extend(records)
                     _rewards.clear();    _rewards.extend(rewards)
-                    pending = _pending_pred   # snapshot
+                    pending = _pending_pred
 
-                # ── Resolve pending PLAY prediction ──────────────────────────
-                # Rule: if the last prediction was PLAY for round N,
-                # and round N has now arrived in data, record the real result.
-                # SKIP predictions are never stored in _pending_pred so they
-                # can never accidentally appear here.
+                # resolve pending PLAY prediction
                 if pending is not None:
                     pred_round = pending["round"]
-                    actual_rec = next(
-                        (r for r in records if r["round"] == pred_round), None
-                    )
+                    actual_rec = next((r for r in records if r["round"] == pred_round), None)
                     if actual_rec is not None:
                         actual_val = actual_rec["reward_index"]
-                        hit = actual_val in pending["top2"]
-                        entry = {
-                            "round":  pred_round,
-                            "top2":   pending["top2"],
-                            "actual": actual_val,
-                            "hit":    hit,
-                            "action": "PLAY",
-                        }
+                        hit        = actual_val in pending["top2"]
+                        entry = {"round":pred_round,"top2":pending["top2"],"actual":actual_val,"hit":hit,"action":"PLAY"}
                         with _lock:
                             _live_log.append(entry)
-                            if len(_live_log) > 50:
-                                _live_log.pop(0)
+                            if len(_live_log) > 50: _live_log.pop(0)
                             _pending_pred = None
-                        status = "HIT" if hit else "MISS"
-                        print(f"[LiveLog] Round {pred_round}: "
-                              f"pred={pending['top2']} actual={actual_val} -> {status}")
+                        print(f"[Live] #{pred_round}: pred={pending['top2']} actual={actual_val} -> {'HIT' if hit else 'MISS'}")
 
                 _rebuild_sim()
-                print(f"[Fetcher] +{count} new round(s). Latest: {records[-1]['round']}")
+                print(f"[Fetcher] +{count} rounds. Latest: #{records[-1]['round']}. Total: {len(records)}")
         except Exception as e:
             print(f"[Fetcher] Unexpected: {e}")
+            with _lock:
+                _fetch_status["last_error"] = str(e)
+                _fetch_status["status"]     = "error"
         time.sleep(POLL_INTERVAL)
 
-# ─── MARKOV ENGINE — exact copy of simulate_v3.py ────────────────────────────
+# ── MARKOV ENGINE ─────────────────────────────────────────────────────────────
 def build_trans(seq, order):
     t = defaultdict(lambda: defaultdict(int))
     for i in range(len(seq) - order):
@@ -154,288 +147,252 @@ def build_trans(seq, order):
         tp[k] = {kk: vv/s for kk, vv in v.items()}
     return t, tp
 
-def _build_global_stats(rewards):
-    freq = Counter(rewards)
-    prob = {k: v/len(rewards) for k, v in freq.items()}
-    t1, tp1 = build_trans(rewards, 1)
-    t2, tp2 = build_trans(rewards, 2)
-    t3, tp3 = build_trans(rewards, 3)
-    t4, tp4 = build_trans(rewards, 4)
-    last_seen = {}; gaps = defaultdict(list)
-    for i, r in enumerate(rewards):
-        if r in last_seen: gaps[r].append(i - last_seen[r])
-        last_seen[r] = i
-    avg_gap = {k: sum(v)/len(v) if v else 8 for k, v in gaps.items()}
-    rl = defaultdict(list); i = 0
-    while i < len(rewards):
-        j = i
-        while j < len(rewards) and rewards[j] == rewards[i]: j += 1
-        rl[rewards[i]].append(j - i); i = j
-    avg_run = {k: sum(v)/len(v) for k, v in rl.items()}
-    return prob, t1, tp1, t2, tp2, t3, tp3, t4, tp4, avg_gap, avg_run
+def build_global_stats(rewards):
+    """
+    Build all global stats from rewards list.
+    rewards must be ascending (oldest first, newest last).
+    This matches app.py data direction.
+    """
+    freq    = Counter(rewards)
+    prob    = {k: v/len(rewards) for k, v in freq.items()}
+    t1,tp1  = build_trans(rewards,1)
+    t2,tp2  = build_trans(rewards,2)
+    t3,tp3  = build_trans(rewards,3)
+    t4,tp4  = build_trans(rewards,4)
+    ls={}; gaps=defaultdict(list)
+    for i,r in enumerate(rewards):
+        if r in ls: gaps[r].append(i-ls[r])
+        ls[r]=i
+    avg_gap = {k: sum(v)/len(v) if v else 8 for k,v in gaps.items()}
+    rl=defaultdict(list); i=0
+    while i<len(rewards):
+        j=i
+        while j<len(rewards) and rewards[j]==rewards[i]: j+=1
+        rl[rewards[i]].append(j-i); i=j
+    avg_run = {k: sum(v)/len(v) for k,v in rl.items()}
+    return prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,avg_gap,avg_run
 
-def score_round(history, prob, t1, tp1, t2, tp2, t3, tp3, t4, tp4, avg_gap_g, avg_run_g):
-    n = len(history)
-    if n < 4:
-        ranked = sorted(prob.items(), key=lambda x: -x[1])
-        scores = {k: 1/8 for k in range(1, 9)}
-        return [ranked[0][0], ranked[1][0]], scores, 3.0, 0.125, 0.125
-    l1, l2, l3, l4 = history[-1], history[-2], history[-3], history[-4]
-    k1=(l1,); k2=(l2,l1); k3=(l3,l2,l1); k4=(l4,l3,l2,l1)
-    def rel(t, key):
-        return min(1.0, sum(t[key].values()) / 30) if key in t else 0
-    r2=rel(t2,k2); r3=rel(t3,k3); r4=rel(t4,k4)
+def score_round(history, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,avg_gap_g,avg_run_g):
+    """
+    history must be ascending slice: history[-1] = most recent round.
+    Global stats (prob, trans) must be built from same ascending data.
+    """
+    n=len(history)
+    if n<4:
+        ranked=sorted(prob.items(),key=lambda x:-x[1])
+        return [ranked[0][0],ranked[1][0]],{k:1/8 for k in range(1,9)},3.0,0.125,0.125
+    l1,l2,l3,l4=history[-1],history[-2],history[-3],history[-4]
+    k1=(l1,);k2=(l2,l1);k3=(l3,l2,l1);k4=(l4,l3,l2,l1)
+    def rel(t,key): return min(1.0,sum(t[key].values())/30) if key in t else 0
+    r2=rel(t2,k2);r3=rel(t3,k3);r4=rel(t4,k4)
     WINDOW=100; WINDOW_SHORT=20
-    recent  = history[-WINDOW:]       if n >= WINDOW       else history
-    rshort  = history[-WINDOW_SHORT:] if n >= WINDOW_SHORT else history
-    rec_cnt = Counter(recent); rs_cnt = Counter(rshort)
-    rec_len = len(recent);     rs_len  = len(rshort)
-    last_pos = {}
-    for i2, r in enumerate(history): last_pos[r] = i2
-    run_val = history[-1]; run_len = 1
-    for i2 in range(n-2, -1, -1):
-        if history[i2] == run_val: run_len += 1
+    recent=history[-WINDOW:] if n>=WINDOW else history
+    rshort=history[-WINDOW_SHORT:] if n>=WINDOW_SHORT else history
+    rc=Counter(recent);rsc=Counter(rshort)
+    lp={}
+    for i2,r in enumerate(history): lp[r]=i2
+    rv=history[-1];rl2=1
+    for i2 in range(n-2,-1,-1):
+        if history[i2]==rv: rl2+=1
         else: break
-    gaps_h = defaultdict(list); lseen_h = {}
-    for i2, r in enumerate(history):
-        if r in lseen_h: gaps_h[r].append(i2 - lseen_h[r])
-        lseen_h[r] = i2
-    avg_gap_h = {r: sum(gaps_h[r])/len(gaps_h[r]) if gaps_h.get(r) else avg_gap_g.get(r, 8)
-                 for r in range(1, 9)}
-    rl_h = defaultdict(list); i2 = 0
-    while i2 < n:
-        j = i2
-        while j < n and history[j] == history[i2]: j += 1
-        rl_h[history[i2]].append(j - i2); i2 = j
-    avg_run_h = {r: sum(rl_h[r])/len(rl_h[r]) if rl_h.get(r) else avg_run_g.get(r, 1.5)
-                 for r in range(1, 9)}
-    score = {}
-    for idx in range(1, 9):
-        base  = prob.get(idx, 0)
-        m1    = tp1.get(k1, {}).get(idx, base)
-        m2    = tp2.get(k2, {}).get(idx, m1)  if r2 > 0 else m1
-        m3    = tp3.get(k3, {}).get(idx, m2)  if r3 > 0 else m2
-        m4    = tp4.get(k4, {}).get(idx, m3)  if r4 > 0 else m3
-        rec_p  = rec_cnt.get(idx, 0) / rec_len
-        recs_p = rs_cnt.get(idx, 0)  / rs_len
-        pos    = last_pos.get(idx, 0); ag = avg_gap_h.get(idx, 8)
-        od     = (n - 1 - pos) / ag if ag else 0
-        od_boost    = min(0.5, max(0.0, (od - 1.0) * 0.1))
-        run_penalty = 0.05 if idx == run_val and run_len >= avg_run_h.get(idx, 1.5) else 0
-        w_base=0.05; w_m1=0.10; w_m2=0.15*r2; w_m3=0.25*r3; w_m4=0.20*r4
-        w_rec=0.10;  w_vs=0.10; w_od=0.05
-        total_w = w_base+w_m1+w_m2+w_m3+w_m4+w_rec+w_vs+w_od or 1
-        raw = (w_base*base + w_m1*m1 + w_m2*m2 + w_m3*m3 + w_m4*m4
-               + w_rec*rec_p + w_vs*recs_p + w_od*od_boost)
-        score[idx] = max(0.0, raw / total_w - run_penalty)
-    total_s = sum(score.values()) or 1
-    score   = {k: v/total_s for k, v in score.items()}
-    ranked  = sorted(score.items(), key=lambda x: -x[1])
-    entropy    = -sum(v * math.log2(v) for v in score.values() if v > 0)
-    return [ranked[0][0], ranked[1][0]], score, entropy, ranked[0][1], ranked[1][1]
+    gh=defaultdict(list);lsh={}
+    for i2,r in enumerate(history):
+        if r in lsh: gh[r].append(i2-lsh[r])
+        lsh[r]=i2
+    agh={r:sum(gh[r])/len(gh[r]) if gh.get(r) else avg_gap_g.get(r,8) for r in range(1,9)}
+    rh=defaultdict(list);i2=0
+    while i2<n:
+        j=i2
+        while j<n and history[j]==history[i2]: j+=1
+        rh[history[i2]].append(j-i2);i2=j
+    arh={r:sum(rh[r])/len(rh[r]) if rh.get(r) else avg_run_g.get(r,1.5) for r in range(1,9)}
+    sc={}
+    for idx in range(1,9):
+        base=prob.get(idx,0)
+        m1=tp1.get(k1,{}).get(idx,base)
+        m2=tp2.get(k2,{}).get(idx,m1) if r2>0 else m1
+        m3=tp3.get(k3,{}).get(idx,m2) if r3>0 else m2
+        m4=tp4.get(k4,{}).get(idx,m3) if r4>0 else m3
+        rp=rc.get(idx,0)/len(recent); rsp=rsc.get(idx,0)/len(rshort)
+        pos=lp.get(idx,0); ag=agh.get(idx,8)
+        od=(n-1-pos)/ag if ag else 0
+        ob=min(0.5,max(0.0,(od-1.0)*0.1))
+        rpen=0.05 if idx==rv and rl2>=arh.get(idx,1.5) else 0
+        wb=0.05;wm1=0.10;wm2=0.15*r2;wm3=0.25*r3;wm4=0.20*r4;wr=0.10;wv=0.10;wo=0.05
+        tw=wb+wm1+wm2+wm3+wm4+wr+wv+wo or 1
+        raw=(wb*base+wm1*m1+wm2*m2+wm3*m3+wm4*m4+wr*rp+wv*rsp+wo*ob)
+        sc[idx]=max(0.0,raw/tw-rpen)
+    ts=sum(sc.values()) or 1
+    sc={k:v/ts for k,v in sc.items()}
+    rk=sorted(sc.items(),key=lambda x:-x[1])
+    ent=-sum(v*math.log2(v) for v in sc.values() if v>0)
+    return [rk[0][0],rk[1][0]],sc,ent,rk[0][1],rk[1][1]
 
-def should_play(top1_score, entropy, brake_active=False):
-    if brake_active:
-        return False
-    return top1_score > SKIP_TOP1_THRESHOLD and entropy < SKIP_ENTROPY_THRESHOLD
+def should_play(top1,ent,brake_active=False):
+    if brake_active: return False
+    return top1>SKIP_TOP1_THRESHOLD and ent<SKIP_ENTROPY_THRESHOLD
 
-# ─── SIMULATION — exact walk-forward from simulate_v3.py ─────────────────────
+# ── SIMULATION ────────────────────────────────────────────────────────────────
 def _rebuild_sim():
     global _sim_stats, _brake_left
     with _lock:
-        rewards = list(_rewards)
-    total = len(rewards)
-    if total < TRAIN_ROUNDS + 5:
-        return
+        rewards = list(_rewards)   # ascending copy
+    total=len(rewards)
+    if total < TRAIN_ROUNDS+5: return
 
-    prob, t1, tp1, t2, tp2, t3, tp3, t4, tp4, avg_gap_g, avg_run_g = \
-        _build_global_stats(rewards)
+    # Build global stats from ascending data — SINGLE source of truth
+    stats = build_global_stats(rewards)
 
-    hits = misses = skipped_total = played_total = 0
-    loss_streak = max_loss_streak = win_streak = max_win_streak = 0
-    all_loss_streaks = []
-    brake_remaining  = 0
-    skip_ent_count = skip_top1_count = skip_brake_count = 0
+    hits=misses=sk=pl=0
+    ls=mx=ws=mw=0
+    brake=0
+    se=st=sb=0
 
-    for i in range(TRAIN_ROUNDS, total - 1):
-        history   = rewards[:i+1]
+    for i in range(TRAIN_ROUNDS, total-1):
+        history   = rewards[:i+1]   # ascending slice, history[-1]=most recent
         true_next = rewards[i+1]
 
-        top2, scores, entropy, top1_s, top2_s = score_round(
-            history, prob, t1, tp1, t2, tp2, t3, tp3, t4, tp4, avg_gap_g, avg_run_g
-        )
+        top2,_,ent,t1s,_=score_round(history,*stats)
 
-        brake_active = brake_remaining > 0
-        if brake_remaining > 0:
-            brake_remaining -= 1
-
-        play = should_play(top1_s, entropy, brake_active)
+        ba=brake>0
+        if brake>0: brake-=1
+        play=should_play(t1s,ent,ba)
 
         if not play:
-            skipped_total += 1
-            if brake_active:
-                skip_brake_count += 1
-            elif entropy >= SKIP_ENTROPY_THRESHOLD:
-                skip_ent_count += 1
-            else:
-                skip_top1_count += 1
-            continue   # SKIP — do not count, do not log
+            sk+=1
+            if ba:             sb+=1
+            elif ent>=SKIP_ENTROPY_THRESHOLD: se+=1
+            else:              st+=1
+            continue
 
-        # PLAYED round
-        played_total += 1
-        hit = true_next in top2
-
+        pl+=1
+        hit=true_next in top2
         if hit:
-            hits += 1
-            if loss_streak > 0:
-                all_loss_streaks.append(loss_streak)
-            loss_streak = 0
-            win_streak += 1
-            max_win_streak = max(max_win_streak, win_streak)
+            hits+=1; ls=0; ws+=1; mw=max(mw,ws)
         else:
-            misses += 1
-            loss_streak += 1
-            max_loss_streak = max(max_loss_streak, loss_streak)
-            win_streak = 0
-            if loss_streak >= BRAKE_TRIGGER:
-                brake_remaining = BRAKE_PAUSE
+            misses+=1; ls+=1; mx=max(mx,ls); ws=0
+            if ls>=BRAKE_TRIGGER: brake=BRAKE_PAUSE
 
-    if loss_streak > 0:
-        all_loss_streaks.append(loss_streak)
-
-    sim_total = total - TRAIN_ROUNDS - 1
-    acc      = hits / played_total * 100 if played_total else 0
-    play_pct = played_total / sim_total * 100 if sim_total else 0
+    sim_total=total-TRAIN_ROUNDS-1
+    acc=hits/pl*100 if pl else 0
 
     with _lock:
-        _sim_stats = {
-            "total":        total,
-            "sim_total":    sim_total,
-            "played":       played_total,
-            "skipped":      skipped_total,
-            "hits":         hits,
-            "misses":       misses,
-            "accuracy":     round(acc, 2),
-            "play_pct":     round(play_pct, 1),
-            "max_loss":     max_loss_streak,
-            "max_win":      max_win_streak,
-            "skip_brake":   skip_brake_count,
-            "skip_entropy": skip_ent_count,
-            "skip_top1":    skip_top1_count,
+        _sim_stats={
+            "total":total,"sim_total":sim_total,
+            "played":pl,"skipped":sk,
+            "hits":hits,"misses":misses,
+            "accuracy":round(acc,2),
+            "play_pct":round(pl/sim_total*100,1) if sim_total else 0,
+            "max_loss":mx,"max_win":mw,
+            "skip_brake":sb,"skip_entropy":se,"skip_top1":st,
         }
-        _brake_left = brake_remaining
+        _brake_left=brake
 
-# ─── LIVE PREDICTION ──────────────────────────────────────────────────────────
+# ── LIVE PREDICTION ───────────────────────────────────────────────────────────
 def get_prediction():
     global _pending_pred
     with _lock:
-        rewards = list(_rewards)
-        raw     = list(_raw_rounds)
-        brake   = _brake_left
+        rewards=list(_rewards)    # ascending
+        raw=list(_raw_rounds)
+        brake=_brake_left
 
-    if len(rewards) < TRAIN_ROUNDS + 5:
-        return None
+    if len(rewards)<TRAIN_ROUNDS+5: return None
 
-    prob, t1, tp1, t2, tp2, t3, tp3, t4, tp4, avg_gap_g, avg_run_g = \
-        _build_global_stats(rewards)
+    # Build stats from same ascending data
+    stats=build_global_stats(rewards)
+    # Pass full ascending rewards as history — history[-1] = latest round
+    top2,scores,ent,t1s,t2s=score_round(rewards,*stats)
 
-    top2, scores, entropy, t1s, t2s = score_round(
-        rewards, prob, t1, tp1, t2, tp2, t3, tp3, t4, tp4, avg_gap_g, avg_run_g
-    )
+    play=should_play(t1s,ent,brake>0)
 
-    play = should_play(t1s, entropy, brake > 0)
+    skip_reason=None
+    if brake>0:             skip_reason=f"Loss brake ({brake} rounds left)"
+    elif ent>=SKIP_ENTROPY_THRESHOLD: skip_reason=f"High entropy ({ent:.4f})"
+    elif t1s<=SKIP_TOP1_THRESHOLD:    skip_reason=f"Low confidence ({t1s:.4f})"
 
-    skip_reason = None
-    if brake > 0:
-        skip_reason = f"Loss brake ({brake} rounds left)"
-    elif entropy >= SKIP_ENTROPY_THRESHOLD:
-        skip_reason = f"High entropy ({entropy:.4f} >= {SKIP_ENTROPY_THRESHOLD})"
-    elif t1s <= SKIP_TOP1_THRESHOLD:
-        skip_reason = f"Low confidence ({t1s:.4f} <= {SKIP_TOP1_THRESHOLD})"
+    last_round=raw[-1]["round"] if raw else None
+    next_round=(last_round+1) if last_round else None
 
-    last_round = raw[-1]["round"] if raw else None
-    next_round = (last_round + 1) if last_round else None
-
-    # ── Store pending prediction ONLY if action is PLAY ──────────────────────
-    # SKIP rounds must NEVER be stored in _pending_pred.
-    # This ensures SKIP rounds can never appear in _live_log.
+    # ONLY store pending if PLAY — SKIP rounds never go in live_log
     if play and next_round is not None:
         with _lock:
-            cur = _pending_pred
-        if cur is None or cur["round"] != next_round:
+            cur=_pending_pred
+        if cur is None or cur["round"]!=next_round:
             with _lock:
-                _pending_pred = {"round": next_round, "top2": list(top2)}
+                _pending_pred={"round":next_round,"top2":list(top2)}
 
     return {
-        "next_round":   next_round,
-        "latest_round": last_round,
-        "pred1":        top2[0],
-        "pred2":        top2[1],
-        "pred1_name":   CLASS_NAMES.get(top2[0], "?"),
-        "pred2_name":   CLASS_NAMES.get(top2[1], "?"),
-        "pred1_color":  CLASS_COLORS.get(top2[0], "#888"),
-        "pred2_color":  CLASS_COLORS.get(top2[1], "#888"),
-        "pred1_conf":   round(t1s * 100, 2),
-        "pred2_conf":   round(t2s * 100, 2),
-        "entropy":      round(entropy, 4),
-        "action":       "PLAY" if play else "SKIP",
-        "skip_reason":  skip_reason,
-        "all_scores":   {k: round(v * 100, 2) for k, v in scores.items()},
-        "last_10":      rewards[-10:],
-        "total_rounds": len(rewards),
+        "next_round":next_round,"latest_round":last_round,
+        "pred1":top2[0],"pred2":top2[1],
+        "pred1_name":CLASS_NAMES.get(top2[0],"?"),"pred2_name":CLASS_NAMES.get(top2[1],"?"),
+        "pred1_color":CLASS_COLORS.get(top2[0],"#888"),"pred2_color":CLASS_COLORS.get(top2[1],"#888"),
+        "pred1_conf":round(t1s*100,2),"pred2_conf":round(t2s*100,2),
+        "entropy":round(ent,4),"action":"PLAY" if play else "SKIP",
+        "skip_reason":skip_reason,
+        "all_scores":{k:round(v*100,2) for k,v in scores.items()},
+        "last_10":rewards[-10:],"total_rounds":len(rewards),
     }
 
-# ─── ROUTES ────────────────────────────────────────────────────────────────────
+# ── ROUTES ────────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
-    return render_template("index.html", class_names=CLASS_NAMES, class_colors=CLASS_COLORS)
+    return render_template("index.html",class_names=CLASS_NAMES,class_colors=CLASS_COLORS)
 
 @app.route("/api/predict")
 def api_predict():
-    pred = get_prediction()
-    if pred is None:
-        return jsonify({"error": "Not enough data yet"}), 503
+    pred=get_prediction()
+    if pred is None: return jsonify({"error":"Not enough data yet"}),503
     return jsonify(pred)
 
 @app.route("/api/stats")
 def api_stats():
     with _lock:
-        stats = dict(_sim_stats)
-        # live_log: only real PLAY rounds with confirmed results
-        # SKIP rounds are never in here
-        stats["live_log"] = list(_live_log)
+        stats=dict(_sim_stats)
+        live=list(_live_log)
+    live_cur=live_max=0
+    for e in live:
+        if not e["hit"]: live_cur+=1; live_max=max(live_max,live_cur)
+        else: live_cur=0
+    stats["live_log"]=live
+    stats["live_max_loss"]=live_max
+    stats["live_cur_streak"]=live_cur
     return jsonify(stats)
+
+@app.route("/api/status")
+def api_status():
+    with _lock:
+        fs=dict(_fetch_status)
+        total=len(_rewards)
+        latest=_raw_rounds[-1]["round"] if _raw_rounds else None
+    fs["total_rounds"]=total; fs["latest_round"]=latest
+    return jsonify(fs)
 
 @app.route("/api/history")
 def api_history():
     with _lock:
-        raw = list(_raw_rounds[-50:])
+        raw=list(_raw_rounds[-50:])
     return jsonify([{
-        "round":        r["round"],
-        "reward_index": r["reward_index"],
-        "name":         CLASS_NAMES.get(r["reward_index"], "?"),
-        "color":        CLASS_COLORS.get(r["reward_index"], "#888")
+        "round":r["round"],"reward_index":r["reward_index"],
+        "name":CLASS_NAMES.get(r["reward_index"],"?"),
+        "color":CLASS_COLORS.get(r["reward_index"],"#888")
     } for r in reversed(raw)])
 
-# ─── STARTUP ───────────────────────────────────────────────────────────────────
+# ── STARTUP ───────────────────────────────────────────────────────────────────
 def startup():
-    records = _load_file()
+    records=_load_file()
     if records:
-        rewards = [r["reward_index"] for r in records]
+        rewards=[r["reward_index"] for r in records]   # ascending
         with _lock:
             _raw_rounds.extend(records)
             _rewards.extend(rewards)
-        print(f"[Startup] Loaded {len(records)} rounds. Building simulation...")
+        print(f"[Startup] Loaded {len(records)} rounds. Building sim...")
         _rebuild_sim()
-        with _lock:
-            s = dict(_sim_stats)
-        print(f"[Startup] Sim done — played={s.get('played')}, "
-              f"acc={s.get('accuracy')}%, maxloss={s.get('max_loss')}")
-    t = threading.Thread(target=fetcher_loop, daemon=True)
-    t.start()
-    print("[Startup] Fetcher thread started.")
+        with _lock: s=dict(_sim_stats)
+        print(f"[Startup] Done — played={s.get('played')}, acc={s.get('accuracy')}%, maxloss={s.get('max_loss')}")
+    threading.Thread(target=fetcher_loop,daemon=True).start()
+    print("[Startup] Fetcher started.")
 
 startup()
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False)
+if __name__=="__main__":
+    app.run(host="0.0.0.0",port=5000,debug=False)
