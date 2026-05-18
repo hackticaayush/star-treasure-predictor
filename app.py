@@ -15,16 +15,16 @@ BRAKE_PAUSE            = 3
 TRAIN_ROUNDS           = 50
 POLL_INTERVAL          = 5
 
+# High-multiplier classes to watch for bonus picks
+HIGH_MULT_CLASSES      = {2, 3, 4, 7}   # 10x, 25x, 15x, 50x
+
 # Adaptive threshold config
-# Target: play 38-45% of rounds with best possible accuracy
-# The threshold auto-adjusts after each simulation rebuild
-TARGET_PLAY_MIN  = 0.38   # min play rate we want
-TARGET_PLAY_MAX  = 0.45   # max play rate we want
-ENT_THRESH_MIN   = 2.65   # never go below this (accuracy drops)
-ENT_THRESH_MAX   = 2.90   # never go above this (too many bad rounds played)
+TARGET_PLAY_MIN  = 0.38
+TARGET_PLAY_MAX  = 0.45
+ENT_THRESH_MIN   = 2.65
+ENT_THRESH_MAX   = 2.90
 
 # Daily reset: every day at 05:30 AM IST (UTC+5:30)
-# Round 1 starts fresh at this time, so we wipe old JSON and start clean
 RESET_HOUR_IST   = 5
 RESET_MINUTE_IST = 30
 IST              = pytz.timezone("Asia/Kolkata")
@@ -41,50 +41,39 @@ FETCH_HEADERS = {
 
 # ── GLOBAL STATE ──────────────────────────────────────────────────────────────
 _lock              = threading.Lock()
-_rewards           = []       # ascending: oldest→newest
+_rewards           = []
 _raw_rounds        = []
 _sim_stats         = {}
 _brake_left        = 0
-_live_log          = []       # ALL played rounds since server start, no cap
+_live_log          = []
 _pending_pred      = None
-_entropy_threshold = SKIP_ENTROPY_THRESHOLD  # starts at 2.70, adapts over time
+_entropy_threshold = SKIP_ENTROPY_THRESHOLD
 _fetch_status = {
     "last_attempt": None, "last_success": None,
     "last_error": None,   "total_fetched": 0,
     "status": "starting", "last_reset": None,
 }
-_last_reset_date = None  # tracks which calendar date we last reset on
+_last_reset_date = None
 
 # ── DAILY RESET LOGIC ─────────────────────────────────────────────────────────
 def _should_reset():
-    """
-    Returns True if current IST time >= 05:30 AM and we haven't
-    already reset today (i.e. _last_reset_date != today IST date).
-    """
     global _last_reset_date
     now_ist  = datetime.now(IST)
     today    = now_ist.date()
     past_530 = (now_ist.hour > RESET_HOUR_IST or
                 (now_ist.hour == RESET_HOUR_IST and now_ist.minute >= RESET_MINUTE_IST))
-
     if past_530 and _last_reset_date != today:
         return True
     return False
 
 def _do_reset():
-    """Wipe JSON file and all in-memory data. New day, new rounds."""
     global _last_reset_date, _pending_pred
     now_ist = datetime.now(IST)
     today   = now_ist.date()
-
     print(f"[Reset] 5:30 AM IST reached — wiping data for new day ({today})")
-
-    # Delete JSON file
     if os.path.exists(DATA_FILE):
         os.remove(DATA_FILE)
         print(f"[Reset] {DATA_FILE} deleted")
-
-    # Clear all in-memory state
     with _lock:
         _rewards.clear()
         _raw_rounds.clear()
@@ -93,7 +82,6 @@ def _do_reset():
         _pending_pred   = None
         _fetch_status["last_reset"] = now_ist.strftime("%d %b %Y %H:%M IST")
         _fetch_status["status"]     = "reset_done"
-
     _last_reset_date = today
     print(f"[Reset] All data cleared. Waiting for new rounds from API...")
 
@@ -155,7 +143,6 @@ def fetcher_loop():
     global _pending_pred
     while True:
         try:
-            # ── Check daily reset FIRST ──────────────────────────────────────
             if _should_reset():
                 _do_reset()
                 time.sleep(POLL_INTERVAL)
@@ -184,24 +171,29 @@ def fetcher_loop():
                     _rewards.clear();    _rewards.extend(rewards)
                     pending = _pending_pred
 
-                # Resolve pending PLAY prediction
                 if pending is not None:
                     pred_round = pending["round"]
                     actual_rec = next((r for r in records if r["round"] == pred_round), None)
                     if actual_rec is not None:
                         actual_val = actual_rec["reward_index"]
-                        hit        = actual_val in pending["top2"]
+                        # Hit check: top2 OR bonus_picks (if any)
+                        all_preds  = list(pending["top2"])
+                        if pending.get("bonus_picks"):
+                            all_preds += [p for p in pending["bonus_picks"] if p not in all_preds]
+                        hit = actual_val in all_preds
                         entry = {
-                            "round":  pred_round,
-                            "top2":   pending["top2"],
-                            "actual": actual_val,
-                            "hit":    hit,
-                            "action": "PLAY",
+                            "round":       pred_round,
+                            "top2":        pending["top2"],
+                            "bonus_picks": pending.get("bonus_picks"),
+                            "actual":      actual_val,
+                            "hit":         hit,
+                            "action":      "PLAY",
                         }
                         with _lock:
-                            _live_log.append(entry)  # no cap — keep ALL history
+                            _live_log.append(entry)
                             _pending_pred = None
                         print(f"[Live] #{pred_round}: pred={pending['top2']} "
+                              f"bonus={pending.get('bonus_picks')} "
                               f"actual={actual_val} -> {'HIT' if hit else 'MISS'}")
 
                 _rebuild_sim()
@@ -299,6 +291,39 @@ def should_play(t1, ent, brake_active=False):
     if brake_active: return False
     return t1 > SKIP_TOP1_THRESHOLD and ent < _entropy_threshold
 
+# ── BONUS PICK LOGIC ──────────────────────────────────────────────────────────
+def get_bonus_picks(scores, top2):
+    """
+    Returns top-2 high-multiplier classes (2,3,4,7) by score
+    IF at least one of them appears in position 3 or higher (i.e. top-3).
+    Returns None if no high-mult class is in top-3.
+    """
+    ranked = sorted(scores.items(), key=lambda x: -x[1])
+    ranked_ids = [int(k) for k, _ in ranked]
+
+    # Check if any HIGH_MULT_CLASSES is in position 0,1,2 (top-3)
+    top3 = set(ranked_ids[:3])
+    if not top3.intersection(HIGH_MULT_CLASSES):
+        return None  # no high-mult in top-3, no bonus
+
+    # Get top-2 from HIGH_MULT_CLASSES by score, excluding already-in-top2
+    hm_ranked = [
+        (int(k), v) for k, v in ranked
+        if int(k) in HIGH_MULT_CLASSES
+    ]
+    if not hm_ranked:
+        return None
+
+    # Pick top-2 high-mult classes (can overlap with top2 — frontend will handle display)
+    bonus = [cls for cls, _ in hm_ranked[:2]]
+
+    # Only return if bonus adds something not already in top2
+    extra = [b for b in bonus if b not in top2]
+    if not extra:
+        return None  # top2 already covers the high-mult picks
+
+    return bonus  # always return top-2 high-mult even if one overlaps
+
 # ── SIMULATION ────────────────────────────────────────────────────────────────
 def _rebuild_sim():
     global _sim_stats, _brake_left
@@ -331,21 +356,14 @@ def _rebuild_sim():
     acc=hits/pl*100 if pl else 0
     play_pct = pl/sim_total if sim_total else 0
 
-    # ── ADAPTIVE ENTROPY THRESHOLD ────────────────────────────────────────────
-    # After simulation, check if play rate is in target range.
-    # If too few rounds played (< 38%) → relax threshold (raise it)
-    # If too many rounds played (> 45%) → tighten threshold (lower it)
-    # Step size: 0.01 per adjustment, clamped to [ENT_THRESH_MIN, ENT_THRESH_MAX]
     global _entropy_threshold
     cur_thresh = _entropy_threshold
     if play_pct < TARGET_PLAY_MIN:
-        # Too many skips — relax entropy filter
         new_thresh = min(ENT_THRESH_MAX, cur_thresh + 0.034)
     elif play_pct > TARGET_PLAY_MAX:
-        # Too many plays — tighten entropy filter
         new_thresh = max(ENT_THRESH_MIN, cur_thresh - 0.034)
     else:
-        new_thresh = cur_thresh  # already in target range
+        new_thresh = cur_thresh
 
     if abs(new_thresh - cur_thresh) > 0.001:
         print(f"[Adaptive] Entropy threshold: {cur_thresh:.3f} → {new_thresh:.3f}  "
@@ -373,7 +391,7 @@ def get_prediction():
 
     stats=build_global_stats(rewards)
     top2,scores,ent,t1s,t2s=score_round(rewards,*stats)
-    eth  = _entropy_threshold   # adaptive threshold
+    eth  = _entropy_threshold
     play = t1s > SKIP_TOP1_THRESHOLD and ent < eth and brake == 0
 
     skip_reason=None
@@ -384,12 +402,36 @@ def get_prediction():
     last_round=raw[-1]["round"] if raw else None
     next_round=(last_round+1) if last_round else None
 
+    # ── Bonus picks: high-mult classes in top-3 ───────────────────────────────
+    bonus_picks = None
+    if play:
+        bonus_picks = get_bonus_picks(scores, top2)
+
+    # Build bonus pick details for response
+    bonus_details = None
+    if bonus_picks:
+        sc_list = sorted(scores.items(), key=lambda x: -x[1])
+        sc_map  = {int(k): v for k, v in sc_list}
+        bonus_details = [
+            {
+                "idx":   b,
+                "name":  CLASS_NAMES.get(b, "?"),
+                "color": CLASS_COLORS.get(b, "#888"),
+                "conf":  round(sc_map.get(b, 0) * 100, 2),
+            }
+            for b in bonus_picks
+        ]
+
     if play and next_round is not None:
         with _lock:
             cur=_pending_pred
         if cur is None or cur["round"]!=next_round:
             with _lock:
-                _pending_pred={"round":next_round,"top2":list(top2)}
+                _pending_pred={
+                    "round":       next_round,
+                    "top2":        list(top2),
+                    "bonus_picks": list(bonus_picks) if bonus_picks else None,
+                }
 
     return {
         "next_round":next_round,"latest_round":last_round,
@@ -399,6 +441,7 @@ def get_prediction():
         "pred1_conf":round(t1s*100,2),"pred2_conf":round(t2s*100,2),
         "entropy":round(ent,4),"action":"PLAY" if play else "SKIP",
         "skip_reason":skip_reason,
+        "bonus_picks": bonus_details,   # None or list of {idx,name,color,conf}
         "all_scores":{k:round(v*100,2) for k,v in scores.items()},
         "last_10":rewards[-10:],"total_rounds":len(rewards),
     }
@@ -418,7 +461,6 @@ def api_predict():
 def api_stats():
     with _lock:
         stats=dict(_sim_stats); live=list(_live_log)
-    # Live streak calc
     cur=0; mx_live=0
     for e in reversed(live):
         if not e["hit"]: cur+=1; mx_live=max(mx_live,cur)
@@ -437,7 +479,6 @@ def api_status():
     fs["total_rounds"]=total; fs["latest_round"]=latest
     fs["server_time_ist"]=now_ist.strftime("%H:%M:%S IST")
     fs["entropy_threshold"]=round(_entropy_threshold,3)
-    # Time until next reset
     reset_today=now_ist.replace(hour=RESET_HOUR_IST,minute=RESET_MINUTE_IST,second=0,microsecond=0)
     from datetime import timedelta
     if now_ist>=reset_today:
@@ -458,14 +499,10 @@ def api_history():
 # ── STARTUP ───────────────────────────────────────────────────────────────────
 def startup():
     global _last_reset_date
-
-    # Set last_reset_date based on current time so we don't double-reset on start
     now_ist=datetime.now(IST)
     past_530=(now_ist.hour>RESET_HOUR_IST or
               (now_ist.hour==RESET_HOUR_IST and now_ist.minute>=RESET_MINUTE_IST))
     if past_530:
-        # We're past today's reset time — mark today as already reset
-        # (so we don't wipe data that was just loaded for today)
         _last_reset_date=now_ist.date()
 
     records=_load_file()
