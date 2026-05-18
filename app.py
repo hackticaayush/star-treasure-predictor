@@ -295,15 +295,15 @@ def should_play(t1, ent, brake_active=False):
 def get_bonus_picks(scores, top2):
     """
     Returns top-2 high-multiplier classes (2,3,4,7) by score
-    IF at least one of them appears in position 3 or higher (i.e. top-3).
-    Returns None if no high-mult class is in top-3.
+    IF at least one of them appears in position 4 or higher (i.e. top-4).
+    Returns None if no high-mult class is in top-4.
     """
     ranked = sorted(scores.items(), key=lambda x: -x[1])
     ranked_ids = [int(k) for k, _ in ranked]
 
     # Check if any HIGH_MULT_CLASSES is in position 0,1,2 (top-3)
-    top3 = set(ranked_ids[:3])
-    if not top3.intersection(HIGH_MULT_CLASSES):
+    top4 = set(ranked_ids[:4])
+    if not top4.intersection(HIGH_MULT_CLASSES):
         return None  # no high-mult in top-3, no bonus
 
     # Get top-2 from HIGH_MULT_CLASSES by score, excluding already-in-top2
@@ -402,7 +402,7 @@ def get_prediction():
     last_round=raw[-1]["round"] if raw else None
     next_round=(last_round+1) if last_round else None
 
-    # ── Bonus picks: high-mult classes in top-3 ───────────────────────────────
+    # ── Bonus picks: high-mult classes in top-4 ───────────────────────────────
     bonus_picks = None
     if play:
         bonus_picks = get_bonus_picks(scores, top2)
