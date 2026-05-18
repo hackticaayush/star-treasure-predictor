@@ -426,64 +426,42 @@ let lastRound = null;
 
 function fmt(n){ return n !== null && n !== undefined ? n : '—'; }
 
-function buildUI(pred, stats, history) {
-  const isPlay = pred.action === "PLAY";
-  const p1c = CLASS_COLORS[pred.pred1] || "#888";
-  const p2c = CLASS_COLORS[pred.pred2] || "#888";
+function buildUI(pred, stats, history, status) {
+  const isPlay  = pred.action === 'PLAY';
+  const p1c     = pred.pred1_color || '#888';
+  const p2c     = pred.pred2_color || '#888';
+  const fmt     = n => n == null ? '—' : n.toLocaleString();
 
-  // Score bars sorted
-  const sorted = Object.entries(pred.all_scores).sort((a,b)=>b[1]-a[1]);
-  const maxScore = sorted[0]?.[1] || 1;
-
-  const scoreRows = sorted.map(([idx, pct]) => {
-    const cls = parseInt(idx);
-    const color = CLASS_COLORS[cls];
-    const name  = CLASS_NAMES[cls];
-    const isPick = cls === pred.pred1 || cls === pred.pred2;
-    const w = Math.round(pct / maxScore * 100);
-    return `
-    <div class="score-item ${isPick ? 'highlighted' : ''}">
-      <div class="score-dot" style="background:${color}"></div>
-      <div class="score-info">
-        <div class="score-name">${name}</div>
-        <div class="score-pct">${pct.toFixed(1)}%</div>
-      </div>
-      <div class="score-bar-wrap">
-        <div class="score-mini-bar" style="background:${color};width:${w}%;opacity:${isPick?1:0.4}"></div>
-      </div>
-    </div>`;
-  }).join('');
-
-  // History items
-  const histItems = (history||[]).slice(0,20).map(h => {
-    const c = CLASS_COLORS[h.reward_index];
+  // History bar
+  const histItems = (history||[]).map(h => {
+    const c = CLASS_COLORS[h.reward_index] || '#888';
     return `<div class="hist-item" style="background:${c}18;border-color:${c}40">
       <div class="hist-num" style="color:${c}">${h.reward_index}</div>
       <div class="hist-rnd">#${h.round}</div>
     </div>`;
   }).join('');
 
-  // Live played results — ALL entries, newest first, fully scrollable
+  // Live played results — ALL rounds since server start, newest first, NO LIMIT
   const liveEntries = (stats.live_log || []).slice().reverse();
   const liveHits    = liveEntries.filter(r => r.hit).length;
-  const liveMisses  = liveEntries.filter(r => !r.hit).length;
-  const liveAcc     = liveEntries.length ? (liveHits / liveEntries.length * 100).toFixed(1) : '—';
+  const liveMisses  = liveEntries.length - liveHits;
+  const liveAcc     = liveEntries.length ? (liveHits / liveEntries.length * 100).toFixed(1) : null;
 
   // Current streak
-  let curStreak = 0; let curStreakType = '';
+  let curStreakLen = 0, curStreakType = '';
   for (const r of liveEntries) {
-    if (curStreak === 0) { curStreakType = r.hit ? 'W' : 'L'; curStreak = 1; }
-    else if ((r.hit && curStreakType==='W') || (!r.hit && curStreakType==='L')) curStreak++;
+    if (curStreakLen === 0) { curStreakType = r.hit ? 'W' : 'L'; curStreakLen = 1; }
+    else if ((r.hit && curStreakType==='W') || (!r.hit && curStreakType==='L')) curStreakLen++;
     else break;
   }
 
-  const resultRows = liveEntries.map((r, idx) => {
-    const ac    = CLASS_COLORS[r.actual];
-    const p1col = CLASS_COLORS[r.top2[0]];
-    const p2col = CLASS_COLORS[r.top2[1]];
-    const rowBg = r.hit ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.06)';
+  const resultRows = liveEntries.map(r => {
+    const ac    = CLASS_COLORS[r.actual]   || '#888';
+    const p1col = CLASS_COLORS[r.top2[0]] || '#888';
+    const p2col = CLASS_COLORS[r.top2[1]] || '#888';
+    const rowBg = r.hit ? 'rgba(34,197,94,0.07)' : 'rgba(239,68,68,0.07)';
     return `<div class="result-row" style="background:${rowBg}">
-      <div class="result-round" style="min-width:52px">#${r.round}</div>
+      <div class="result-round" style="min-width:54px;font-size:12px">#${r.round}</div>
       <div class="result-pred">
         <div class="mini-tag" style="background:${p1col}22;color:${p1col};border:1px solid ${p1col}50">${r.top2[0]}</div>
         <div class="mini-tag" style="background:${p2col}22;color:${p2col};border:1px solid ${p2col}50">${r.top2[1]}</div>
@@ -495,15 +473,26 @@ function buildUI(pred, stats, history) {
     </div>`;
   }).join('');
 
-  // Entropy meter (0–3 scale)
-  const entPct = Math.min(100, (pred.entropy / 3.0) * 100);
+  // Entropy meter
+  const entPct   = Math.min(100, (pred.entropy / 3.0) * 100);
   const entColor = pred.entropy < 2.0 ? '#22c55e' : pred.entropy < 2.7 ? '#eab308' : '#ef4444';
   const threshPct = (2.70 / 3.0) * 100;
 
   // Accuracy color
   const accColor = (stats.accuracy||0) >= 60 ? 'good' : 'warn';
 
+  // Status info
+  const nextReset  = (status && status.next_reset_in) ? status.next_reset_in : null;
+  const fetchOk    = status && (status.status === 'ok' || status.status === 'ok_no_new');
+  const fetchError = status && status.status === 'error';
+
   const html = `
+  <!-- FETCH STATUS BANNER -->
+  ${fetchError ? `<div style="background:#7f1d1d;border:1px solid #ef4444;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px">
+    <div style="color:#ef4444;font-weight:700">⚠ API Error — Data may be stale</div>
+    <div style="color:#fca5a5;margin-top:3px">${status.last_error||'Unknown error'}</div>
+  </div>` : ''}
+
   <!-- MAIN PREDICTION -->
   <div class="pred-card updated">
     <div class="round-badge">
@@ -523,70 +512,65 @@ function buildUI(pred, stats, history) {
       <div class="pick-box" style="border-color:${p1c}60;background:${p1c}10">
         <div class="pick-rank">PICK 1</div>
         <div class="pick-num" style="color:${p1c}">${pred.pred1}</div>
-        <div class="pick-name" style="color:${p1c}">${pred.pred1_name}</div>
-        <div class="pick-conf">${pred.pred1_conf.toFixed(1)}% conf</div>
+        <div class="pick-name">${pred.pred1_name||''}</div>
+        <div class="pick-conf">${pred.pred1_conf||0}%</div>
       </div>
+      <div class="pick-divider">OR</div>
       <div class="pick-box" style="border-color:${p2c}60;background:${p2c}10">
         <div class="pick-rank">PICK 2</div>
         <div class="pick-num" style="color:${p2c}">${pred.pred2}</div>
-        <div class="pick-name" style="color:${p2c}">${pred.pred2_name}</div>
-        <div class="pick-conf">${pred.pred2_conf.toFixed(1)}% conf</div>
+        <div class="pick-name">${pred.pred2_name||''}</div>
+        <div class="pick-conf">${pred.pred2_conf||0}%</div>
       </div>
     </div>
 
-    <!-- Entropy -->
-    <div class="entropy-wrap">
-      <div class="conf-label">
+    <div class="entropy-section">
+      <div class="ent-label">
         <span>Model Entropy</span>
         <span style="color:${entColor}">${pred.entropy}</span>
       </div>
-      <div class="entropy-track">
-        <div class="entropy-fill" style="width:${entPct}%;background:${entColor}"></div>
-        <div class="entropy-mark" style="left:${threshPct}%"></div>
-      </div>
-      <div style="font-size:10px;color:var(--muted);display:flex;justify-content:space-between">
-        <span>0 (certain)</span><span style="color:rgba(255,255,255,0.3)">▲ threshold</span><span>3 (random)</span>
+      <div class="ent-bar-bg">
+        <div class="ent-bar-fill" style="width:${entPct}%;background:${entColor}"></div>
+        <div class="ent-threshold" style="left:${threshPct}%"></div>
       </div>
     </div>
 
-    <!-- Meta -->
-    <div class="meta-row" style="margin-top:14px">
-      <span>Latest Round</span><span class="meta-val">#${fmt(pred.latest_round)}</span>
-    </div>
-    <div class="meta-row">
-      <span>Total Data</span><span class="meta-val">${fmt(pred.total_rounds)} rounds</span>
+    <div style="margin-top:10px;font-size:11px;color:var(--muted)">
+      Last 10: ${(pred.last_10||[]).join(' › ')}
+      ${nextReset ? `&nbsp;·&nbsp; Reset in: ${nextReset}` : ''}
     </div>
   </div>
-
-  <!-- REFRESH -->
-  <button class="refresh-btn" onclick="refreshAll()">
-    <span class="refresh-icon">↻</span> Refresh Prediction
-  </button>
-  <div class="countdown" id="countdown">Auto-refresh in <b id="cdNum">5</b>s</div>
 
   <!-- SCORE BREAKDOWN -->
   <div class="card">
     <div class="card-title">Score Breakdown</div>
-    <div class="score-grid">${scoreRows}</div>
+    ${Object.entries(pred.all_scores||{})
+      .sort((a,b) => b[1]-a[1])
+      .map(([idx,sc]) => {
+        const c  = CLASS_COLORS[idx]||'#888';
+        const nm = CLASS_NAMES[idx]||idx;
+        const isPick = [pred.pred1,pred.pred2].includes(+idx);
+        return `<div class="score-row ${isPick?'score-pick':''}">
+          <div class="score-idx" style="color:${c}">${idx}</div>
+          <div class="score-name">${nm}</div>
+          <div class="score-bar-wrap">
+            <div class="score-bar" style="width:${sc}%;background:${c}${isPick?'':'88'}"></div>
+          </div>
+          <div class="score-pct" style="color:${isPick?c:'var(--muted)'}">${sc}%</div>
+        </div>`;
+      }).join('')}
   </div>
 
-  <!-- LAST 10 -->
-  <div class="card">
-    <div class="card-title">Recent History</div>
-    <div class="history-scroll">${histItems}</div>
-    <div style="font-size:11px;color:var(--muted);margin-top:8px;text-align:right">← scroll for more</div>
-  </div>
-
-  <!-- STATS -->
+  <!-- SIM STATS -->
   <div class="card">
     <div class="card-title">Simulation Stats</div>
     <div class="stats-grid">
       <div class="stat-box">
-        <div class="stat-val ${accColor}">${fmt(stats.accuracy)}%</div>
+        <div class="stat-val ${accColor}">${stats.accuracy||0}%</div>
         <div class="stat-label">Accuracy</div>
       </div>
       <div class="stat-box">
-        <div class="stat-val">${fmt(stats.play_pct)}%</div>
+        <div class="stat-val">${stats.play_pct||0}%</div>
         <div class="stat-label">Play Rate</div>
       </div>
       <div class="stat-box">
@@ -594,7 +578,7 @@ function buildUI(pred, stats, history) {
         <div class="stat-label">Hits</div>
       </div>
       <div class="stat-box">
-        <div class="stat-val" style="color:var(--red)">${fmt(stats.misses)}</div>
+        <div class="stat-val warn">${fmt(stats.misses)}</div>
         <div class="stat-label">Misses</div>
       </div>
       <div class="stat-box">
@@ -608,20 +592,26 @@ function buildUI(pred, stats, history) {
     </div>
   </div>
 
-  <!-- LIVE RESULTS — all played rounds since server start -->
-  \${liveEntries.length > 0 ? `<div class="card" style="padding-bottom:0">
+  <!-- RECENT HISTORY -->
+  ${histItems ? `<div class="card">
+    <div class="card-title">Recent History</div>
+    <div class="hist-strip">${histItems}</div>
+  </div>` : ''}
+
+  <!-- LIVE RESULTS — ALL played rounds, scrollable, no limit -->
+  ${liveEntries.length > 0 ? `<div class="card" style="padding-bottom:0">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div class="card-title" style="margin:0">Live Results</div>
-      <div style="font-size:11px;color:var(--muted)">\${liveEntries.length} played rounds</div>
+      <div style="font-size:11px;color:var(--muted)">${liveEntries.length} played rounds</div>
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-      <span style="background:rgba(34,197,94,0.12);border:1px solid #22c55e44;border-radius:6px;padding:3px 9px;font-size:12px;color:#4ade80">✓ \${liveHits} Hits</span>
-      <span style="background:rgba(239,68,68,0.12);border:1px solid #ef444444;border-radius:6px;padding:3px 9px;font-size:12px;color:#f87171">✗ \${liveMisses} Misses</span>
-      \${liveAcc !== null ? `<span style="background:rgba(99,179,237,0.12);border:1px solid #60a5fa44;border-radius:6px;padding:3px 9px;font-size:12px;color:#93c5fd">\${liveAcc}% Acc</span>` : ''}
-      \${curStreakLen > 1 ? `<span style="background:rgba(250,204,21,0.12);border:1px solid #fde04744;border-radius:6px;padding:3px 9px;font-size:12px;color:#fde047">\${curStreakType==='W' ? '🔥' : '❄️'} \${curStreakLen} \${curStreakType==='W' ? 'Win' : 'Loss'} streak</span>` : ''}
+      <span style="background:rgba(34,197,94,0.12);border:1px solid #22c55e44;border-radius:6px;padding:3px 9px;font-size:12px;color:#4ade80">✓ ${liveHits} Hits</span>
+      <span style="background:rgba(239,68,68,0.12);border:1px solid #ef444444;border-radius:6px;padding:3px 9px;font-size:12px;color:#f87171">✗ ${liveMisses} Misses</span>
+      ${liveAcc !== null ? `<span style="background:rgba(99,179,237,0.12);border:1px solid #60a5fa44;border-radius:6px;padding:3px 9px;font-size:12px;color:#93c5fd">${liveAcc}% Acc</span>` : ''}
+      ${curStreakLen > 1 ? `<span style="background:rgba(250,204,21,0.12);border:1px solid #fde04744;border-radius:6px;padding:3px 9px;font-size:12px;color:#fde047">${curStreakType==='W' ? '🔥' : '❄️'} ${curStreakLen} ${curStreakType==='W' ? 'Win' : 'Loss'} streak</span>` : ''}
     </div>
     <div style="max-height:460px;overflow-y:auto;margin:0 -16px;padding:0 16px 16px">
-      <div class="results-list">\${resultRows}</div>
+      <div class="results-list">${resultRows}</div>
     </div>
   </div>` : ''}
 
@@ -632,7 +622,6 @@ function buildUI(pred, stats, history) {
   document.getElementById('app').innerHTML = html;
   countdownEl = document.getElementById('cdNum');
 
-  // Check if new round
   if (lastRound && pred.latest_round > lastRound) {
     document.querySelector('.pred-card').style.boxShadow = '0 0 30px rgba(99,179,237,0.3)';
     setTimeout(() => {
@@ -655,9 +644,9 @@ async function refreshAll() {
     if (!predRes.ok) throw new Error('Not ready');
     const pred    = await predRes.json();
     const stats   = await statsRes.json();
-    const status  = statusRes && statusRes.ok ? await statusRes.json() : {};
     const history = await histRes.json();
-    buildUI(pred, stats, history);
+    const status  = statusRes.ok ? await statusRes.json() : {};
+    buildUI(pred, stats, history, status);
     document.getElementById('statusDot').style.background = '#22c55e';
     document.getElementById('statusText').textContent = `Round #${pred.latest_round} · Live`;
     countdown = 5;
