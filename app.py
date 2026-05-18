@@ -340,10 +340,10 @@ def _rebuild_sim():
     cur_thresh = _entropy_threshold
     if play_pct < TARGET_PLAY_MIN:
         # Too many skips — relax entropy filter
-        new_thresh = min(ENT_THRESH_MAX, cur_thresh + 0.01)
+        new_thresh = min(ENT_THRESH_MAX, cur_thresh + 0.034)
     elif play_pct > TARGET_PLAY_MAX:
         # Too many plays — tighten entropy filter
-        new_thresh = max(ENT_THRESH_MIN, cur_thresh - 0.01)
+        new_thresh = max(ENT_THRESH_MIN, cur_thresh - 0.034)
     else:
         new_thresh = cur_thresh  # already in target range
 
