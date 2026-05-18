@@ -9,11 +9,19 @@ app = Flask(__name__)
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 DATA_FILE              = "round_data.json"
 SKIP_TOP1_THRESHOLD    = 0.220
-SKIP_ENTROPY_THRESHOLD = 2.70
+SKIP_ENTROPY_THRESHOLD = 2.70   # base value — gets adapted dynamically
 BRAKE_TRIGGER          = 3
 BRAKE_PAUSE            = 3
 TRAIN_ROUNDS           = 50
 POLL_INTERVAL          = 5
+
+# Adaptive threshold config
+# Target: play 38-45% of rounds with best possible accuracy
+# The threshold auto-adjusts after each simulation rebuild
+TARGET_PLAY_MIN  = 0.38   # min play rate we want
+TARGET_PLAY_MAX  = 0.45   # max play rate we want
+ENT_THRESH_MIN   = 2.65   # never go below this (accuracy drops)
+ENT_THRESH_MAX   = 2.90   # never go above this (too many bad rounds played)
 
 # Daily reset: every day at 05:30 AM IST (UTC+5:30)
 # Round 1 starts fresh at this time, so we wipe old JSON and start clean
@@ -32,13 +40,14 @@ FETCH_HEADERS = {
 }
 
 # ── GLOBAL STATE ──────────────────────────────────────────────────────────────
-_lock         = threading.Lock()
-_rewards      = []       # ascending: oldest→newest
-_raw_rounds   = []
-_sim_stats    = {}
-_brake_left   = 0
-_live_log     = []       # ALL played rounds since server start, no cap
-_pending_pred = None
+_lock              = threading.Lock()
+_rewards           = []       # ascending: oldest→newest
+_raw_rounds        = []
+_sim_stats         = {}
+_brake_left        = 0
+_live_log          = []       # ALL played rounds since server start, no cap
+_pending_pred      = None
+_entropy_threshold = SKIP_ENTROPY_THRESHOLD  # starts at 2.70, adapts over time
 _fetch_status = {
     "last_attempt": None, "last_success": None,
     "last_error": None,   "total_fetched": 0,
@@ -286,9 +295,9 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar):
     ent=-sum(v*math.log2(v) for v in sc.values() if v>0)
     return [rk[0][0],rk[1][0]],sc,ent,rk[0][1],rk[1][1]
 
-def should_play(t1,ent,brake_active=False):
+def should_play(t1, ent, brake_active=False):
     if brake_active: return False
-    return t1>SKIP_TOP1_THRESHOLD and ent<SKIP_ENTROPY_THRESHOLD
+    return t1 > SKIP_TOP1_THRESHOLD and ent < _entropy_threshold
 
 # ── SIMULATION ────────────────────────────────────────────────────────────────
 def _rebuild_sim():
@@ -320,14 +329,38 @@ def _rebuild_sim():
 
     sim_total=total-TRAIN_ROUNDS-1
     acc=hits/pl*100 if pl else 0
+    play_pct = pl/sim_total if sim_total else 0
+
+    # ── ADAPTIVE ENTROPY THRESHOLD ────────────────────────────────────────────
+    # After simulation, check if play rate is in target range.
+    # If too few rounds played (< 38%) → relax threshold (raise it)
+    # If too many rounds played (> 45%) → tighten threshold (lower it)
+    # Step size: 0.01 per adjustment, clamped to [ENT_THRESH_MIN, ENT_THRESH_MAX]
+    global _entropy_threshold
+    cur_thresh = _entropy_threshold
+    if play_pct < TARGET_PLAY_MIN:
+        # Too many skips — relax entropy filter
+        new_thresh = min(ENT_THRESH_MAX, cur_thresh + 0.01)
+    elif play_pct > TARGET_PLAY_MAX:
+        # Too many plays — tighten entropy filter
+        new_thresh = max(ENT_THRESH_MIN, cur_thresh - 0.01)
+    else:
+        new_thresh = cur_thresh  # already in target range
+
+    if abs(new_thresh - cur_thresh) > 0.001:
+        print(f"[Adaptive] Entropy threshold: {cur_thresh:.3f} → {new_thresh:.3f}  "
+              f"(play_pct={play_pct*100:.1f}%, target={TARGET_PLAY_MIN*100:.0f}–{TARGET_PLAY_MAX*100:.0f}%)")
+    _entropy_threshold = new_thresh
+
     with _lock:
         _sim_stats={
             "total":total,"sim_total":sim_total,
             "played":pl,"skipped":sk,"hits":hits,"misses":misses,
             "accuracy":round(acc,2),
-            "play_pct":round(pl/sim_total*100,1) if sim_total else 0,
+            "play_pct":round(play_pct*100,1),
             "max_loss":mx,"max_win":mw,
             "skip_brake":sb,"skip_entropy":se,"skip_top1":st,
+            "entropy_threshold":round(new_thresh,3),
         }
         _brake_left=brake
 
@@ -340,12 +373,13 @@ def get_prediction():
 
     stats=build_global_stats(rewards)
     top2,scores,ent,t1s,t2s=score_round(rewards,*stats)
-    play=should_play(t1s,ent,brake>0)
+    eth  = _entropy_threshold   # adaptive threshold
+    play = t1s > SKIP_TOP1_THRESHOLD and ent < eth and brake == 0
 
     skip_reason=None
-    if brake>0:                        skip_reason=f"Loss brake ({brake} rounds left)"
-    elif ent>=SKIP_ENTROPY_THRESHOLD:  skip_reason=f"High entropy ({ent:.4f})"
-    elif t1s<=SKIP_TOP1_THRESHOLD:     skip_reason=f"Low confidence ({t1s:.4f})"
+    if brake>0:                    skip_reason=f"Loss brake ({brake} rounds left)"
+    elif ent>=eth:                 skip_reason=f"High entropy ({ent:.4f} ≥ {eth:.3f})"
+    elif t1s<=SKIP_TOP1_THRESHOLD: skip_reason=f"Low confidence ({t1s:.4f})"
 
     last_round=raw[-1]["round"] if raw else None
     next_round=(last_round+1) if last_round else None
@@ -402,6 +436,7 @@ def api_status():
     now_ist=datetime.now(IST)
     fs["total_rounds"]=total; fs["latest_round"]=latest
     fs["server_time_ist"]=now_ist.strftime("%H:%M:%S IST")
+    fs["entropy_threshold"]=round(_entropy_threshold,3)
     # Time until next reset
     reset_today=now_ist.replace(hour=RESET_HOUR_IST,minute=RESET_MINUTE_IST,second=0,microsecond=0)
     from datetime import timedelta
