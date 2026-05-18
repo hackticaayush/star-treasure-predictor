@@ -294,19 +294,28 @@ def should_play(t1, ent, brake_active=False):
 # ── BONUS PICK LOGIC ──────────────────────────────────────────────────────────
 def get_bonus_picks(scores, top2):
     """
-    Returns top-2 high-multiplier classes (2,3,4,7) by score
-    IF at least one of them appears in position 4 or higher (i.e. top-4).
-    Returns None if no high-mult class is in top-4.
+    Returns top-2 high-multiplier classes (2,3,4,7) by score if EITHER:
+      1. At least one of them appears in top-4 by rank, OR
+      2. At least one of them has probability > 10%
+    Returns None if neither condition is met.
     """
     ranked = sorted(scores.items(), key=lambda x: -x[1])
     ranked_ids = [int(k) for k, _ in ranked]
 
-    # Check if any HIGH_MULT_CLASSES is in position 0,1,2 (top-3)
+    # Condition 1: any HIGH_MULT_CLASS in top-4 by rank
     top4 = set(ranked_ids[:4])
-    if not top4.intersection(HIGH_MULT_CLASSES):
-        return None  # no high-mult in top-3, no bonus
+    in_top4 = bool(top4.intersection(HIGH_MULT_CLASSES))
 
-    # Get top-2 from HIGH_MULT_CLASSES by score, excluding already-in-top2
+    # Condition 2: any HIGH_MULT_CLASS has score > 10%
+    above_10pct = any(
+        scores.get(k, scores.get(str(k), 0)) > 0.10
+        for k in HIGH_MULT_CLASSES
+    )
+
+    if not in_top4 and not above_10pct:
+        return None  # neither condition met, no bonus
+
+    # Get top-2 from HIGH_MULT_CLASSES by score
     hm_ranked = [
         (int(k), v) for k, v in ranked
         if int(k) in HIGH_MULT_CLASSES
@@ -402,7 +411,7 @@ def get_prediction():
     last_round=raw[-1]["round"] if raw else None
     next_round=(last_round+1) if last_round else None
 
-    # ── Bonus picks: high-mult classes in top-4 ───────────────────────────────
+    # ── Bonus picks: high-mult classes in top-4 OR >10% probability ──────────
     bonus_picks = None
     if play:
         bonus_picks = get_bonus_picks(scores, top2)
