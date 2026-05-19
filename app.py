@@ -2,7 +2,7 @@ import json, math, threading, time, os, requests
 from collections import defaultdict, Counter
 from datetime import datetime
 import pytz
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, Response
 
 app = Flask(__name__)
 
@@ -47,11 +47,7 @@ _pending_pred      = None
 _entropy_threshold = SKIP_ENTROPY_THRESHOLD
 _last_reset_date   = None
 
-# ── CACHED PREDICTION ─────────────────────────────────────────────────────────
-# Computed ONCE per new round inside fetcher_loop.
-# All /api/predict calls just read this dict — zero Markov computation per request.
-# 1 user or 10000 users: same cost.
-_cached_pred = None  # public fields + internal "_" fields stripped before sending
+_cached_pred = None
 
 _fetch_status = {
     "last_attempt": None, "last_success": None,
@@ -239,7 +235,6 @@ def get_bonus_picks(scores, top2):
 
 # ── SIM REBUILD ───────────────────────────────────────────────────────────────
 def _run_sim(rewards):
-    """Pure function — returns (sim_dict, brake_left, play_pct). No global writes."""
     total = len(rewards)
     if total < TRAIN_ROUNDS + 5:
         return {}, 0, 0.0
@@ -272,12 +267,8 @@ def _run_sim(rewards):
         "skip_brake":sb,"skip_entropy":se,"skip_top1":st,
     }, brake, play_pct
 
-# ── BUILD CACHED PRED — called once per new round, result served to all users ─
+# ── BUILD CACHED PRED ─────────────────────────────────────────────────────────
 def _build_cached_pred(rewards, raw_rounds, brake):
-    """
-    Full prediction dict. Internal keys prefixed '_' are stripped before API response.
-    Returns None if not enough data.
-    """
     if len(rewards) < TRAIN_ROUNDS + 5:
         return None
     stats = build_global_stats(rewards)
@@ -305,7 +296,6 @@ def _build_cached_pred(rewards, raw_rounds, brake):
         ]
 
     return {
-        # ── public (sent to browser) ──────────────────────────────────────────
         "next_round":   next_round,  "latest_round": last_round,
         "pred1":        top2[0],     "pred2":        top2[1],
         "pred1_name":   CLASS_NAMES.get(top2[0],"?"),
@@ -321,14 +311,13 @@ def _build_cached_pred(rewards, raw_rounds, brake):
         "all_scores":   {k: round(v*100,2) for k,v in scores.items()},
         "last_10":      rewards[-10:],
         "total_rounds": len(rewards),
-        # ── internal (stripped before API response) ───────────────────────────
         "_play":        play,
         "_top2":        list(top2),
         "_bonus_picks": list(bonus_picks) if bonus_picks else None,
         "_next_round":  next_round,
     }
 
-# ── FETCHER LOOP — sole owner of all state mutation ──────────────────────────
+# ── FETCHER LOOP ──────────────────────────────────────────────────────────────
 def fetcher_loop():
     global _pending_pred, _cached_pred, _entropy_threshold, _brake_left
 
@@ -362,7 +351,6 @@ def fetcher_loop():
                     _rewards.clear();    _rewards.extend(rewards)
                     pending = _pending_pred
 
-                # ── 1. Resolve pending hit/miss ───────────────────────────────
                 if pending is not None:
                     pred_round = pending["round"]
                     actual_rec = next((r for r in records if r["round"] == pred_round), None)
@@ -390,7 +378,6 @@ def fetcher_loop():
                         pending = None
                         print(f"[Fetcher] Stale pending cleared (#{pred_round})")
 
-                # ── 2. Sim + adaptive threshold ───────────────────────────────
                 sim_dict, brake, play_pct = _run_sim(rewards)
 
                 cur = _entropy_threshold
@@ -406,12 +393,10 @@ def fetcher_loop():
                     _sim_stats.clear(); _sim_stats.update(sim_dict)
                     _brake_left = brake
 
-                # ── 3. Build cached pred — ONE calculation, all users read it ─
                 cached = _build_cached_pred(rewards, records, brake)
                 with _lock:
                     _cached_pred = cached
 
-                # ── 4. Update pending (no browser needed) ─────────────────────
                 if cached and cached["_play"] and cached["_next_round"] is not None:
                     nr = cached["_next_round"]
                     with _lock:
@@ -436,7 +421,38 @@ def fetcher_loop():
                 _fetch_status["status"]     = "error"
         time.sleep(POLL_INTERVAL)
 
-# ── API ROUTES — read-only, zero computation, all users share one cache ───────
+# ══════════════════════════════════════════════════════════════════════════════
+#  PWA ROUTES — sw.js aur manifest.json serve karne ke liye
+#  sw.js aur manifest.json file project root mein honi chahiye (app.py ke saath)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/pwa/sw.js")
+def serve_sw():
+    sw_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sw.js")
+    with open(sw_path, "r") as f:
+        content = f.read()
+    return Response(
+        content,
+        mimetype="application/javascript",
+        headers={
+            "Service-Worker-Allowed": "/",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+        }
+    )
+
+@app.route("/pwa/manifest.json")
+def serve_manifest():
+    manifest_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "manifest.json")
+    with open(manifest_path, "r") as f:
+        content = f.read()
+    return Response(
+        content,
+        mimetype="application/manifest+json",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+# ── API ROUTES ────────────────────────────────────────────────────────────────
+
 @app.route("/")
 def index():
     return render_template("index.html", class_names=CLASS_NAMES, class_colors=CLASS_COLORS)
@@ -447,7 +463,6 @@ def api_predict():
         cached = _cached_pred
     if cached is None:
         return jsonify({"error": "Not enough data yet"}), 503
-    # Strip internal "_" keys — never expose to browser
     pub = {k: v for k, v in cached.items() if not k.startswith("_")}
     return jsonify(pub)
 
@@ -525,7 +540,6 @@ def startup():
             _sim_stats.update(sim_dict)
             _brake_left = brake
 
-        # Build initial cache so first user gets instant response
         cached = _build_cached_pred(rewards, records, brake)
         with _lock:
             _cached_pred = cached
