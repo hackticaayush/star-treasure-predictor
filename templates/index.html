@@ -4,9 +4,21 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Treasure AI</title>
+
+<!-- PWA -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#07052a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Treasure AI">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+
 <style>
+/* ════════════════════════════════════════════
+   BASE / RESET
+════════════════════════════════════════════ */
 :root {
   --gold:   #ffd700;
   --gold2:  #ffab00;
@@ -41,11 +53,208 @@ body{
   background:radial-gradient(ellipse 85% 85% at 50% 50%, transparent 25%, rgba(4,2,22,0.6) 100%);
 }
 
+/* ════════════════════════════════════════════
+   SCREEN SYSTEM — only one visible at a time
+════════════════════════════════════════════ */
+.screen{
+  position:fixed;inset:0;z-index:10;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  padding:24px 20px;
+  opacity:0;pointer-events:none;
+  transition:opacity .4s ease;
+}
+.screen.active{opacity:1;pointer-events:all;}
+
+/* ════════════════════════════════════════════
+   SCREEN 1 — BROWSER GATE (not installed)
+════════════════════════════════════════════ */
+#s-browser {
+  text-align:center;
+  background:rgba(4,2,22,0.92);
+  backdrop-filter:blur(30px);
+}
+
+.gate-logo{
+  font-family:'Lilita One',cursive;
+  font-size:36px;letter-spacing:2px;
+  background:linear-gradient(180deg,#fff 0%,#ffd700 50%,#ff9800 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  filter:drop-shadow(0 2px 18px rgba(255,200,0,0.5));
+  margin-bottom:6px;
+}
+.gate-sub{font-size:13px;color:var(--muted);font-weight:700;letter-spacing:1px;margin-bottom:40px;}
+
+.gate-card{
+  background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.1);
+  border-radius:22px;
+  padding:28px 24px;
+  width:100%;max-width:360px;
+  margin-bottom:20px;
+}
+.gate-icon{font-size:52px;margin-bottom:16px;}
+.gate-title{
+  font-family:'Lilita One',cursive;
+  font-size:22px;color:var(--gold);
+  margin-bottom:10px;
+}
+.gate-desc{font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:24px;}
+
+.install-btn{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  width:100%;padding:15px;border-radius:14px;border:none;cursor:pointer;
+  font-family:'Lilita One',cursive;font-size:18px;letter-spacing:1px;
+  background:linear-gradient(135deg,#ffd700,#ff9800);
+  color:#07052a;
+  box-shadow:0 4px 30px rgba(255,215,0,0.3);
+  transition:transform .15s,box-shadow .15s;
+}
+.install-btn:active{transform:scale(0.97);}
+.install-btn:disabled{
+  background:rgba(255,255,255,0.1);color:var(--muted);
+  box-shadow:none;cursor:default;
+}
+
+.gate-steps{
+  width:100%;max-width:360px;
+  text-align:left;
+}
+.gate-steps-title{
+  font-size:11px;font-weight:800;color:rgba(255,255,255,0.3);
+  letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;text-align:center;
+}
+.step{
+  display:flex;align-items:flex-start;gap:10px;
+  margin-bottom:10px;font-size:13px;color:var(--muted);line-height:1.5;
+}
+.step-n{
+  width:22px;height:22px;border-radius:50%;flex-shrink:0;
+  background:rgba(255,215,0,0.12);border:1px solid rgba(255,215,0,0.3);
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:800;color:var(--gold);margin-top:1px;
+}
+.ios-steps{display:none;}
+
+/* ════════════════════════════════════════════
+   SCREEN 2 — UUID REVEAL (first launch in PWA)
+════════════════════════════════════════════ */
+#s-uuid{background:rgba(4,2,22,0.92);backdrop-filter:blur(30px);text-align:center;}
+
+.uuid-logo{
+  font-family:'Lilita One',cursive;font-size:30px;
+  background:linear-gradient(180deg,#fff 0%,#ffd700 50%,#ff9800 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  margin-bottom:4px;
+}
+.uuid-badge{
+  display:inline-block;
+  background:rgba(0,229,255,0.1);border:1px solid rgba(0,229,255,0.3);
+  border-radius:20px;padding:4px 14px;
+  font-size:11px;font-weight:800;color:var(--cyan);letter-spacing:2px;
+  margin-bottom:32px;
+}
+
+.uuid-card{
+  background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.1);
+  border-radius:22px;padding:28px 22px;
+  width:100%;max-width:380px;margin-bottom:20px;
+}
+.uuid-card-title{
+  font-family:'Lilita One',cursive;font-size:17px;color:var(--gold);
+  margin-bottom:6px;
+}
+.uuid-card-desc{
+  font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:22px;
+}
+
+.uuid-box{
+  background:rgba(0,0,0,0.4);
+  border:1.5px solid rgba(255,215,0,0.3);
+  border-radius:14px;padding:16px 14px;
+  margin-bottom:14px;position:relative;
+}
+.uuid-label{
+  font-size:10px;font-weight:800;color:rgba(255,215,0,0.5);
+  letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;
+}
+.uuid-val{
+  font-family:'Share Tech Mono',monospace;
+  font-size:13px;color:#fff;
+  word-break:break-all;line-height:1.6;
+  letter-spacing:0.5px;
+}
+
+.copy-btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;padding:12px;border-radius:12px;
+  border:1.5px solid rgba(255,215,0,0.35);
+  background:rgba(255,215,0,0.06);
+  color:var(--gold);font-family:'Lilita One',cursive;font-size:15px;
+  cursor:pointer;transition:all .15s;margin-bottom:10px;
+}
+.copy-btn:active{background:rgba(255,215,0,0.14);}
+.copy-btn.copied{border-color:rgba(0,230,118,0.4);color:var(--green);background:rgba(0,230,118,0.06);}
+
+.uuid-warn{
+  background:rgba(255,152,0,0.08);border:1px solid rgba(255,152,0,0.2);
+  border-radius:12px;padding:12px 14px;
+  font-size:12px;color:rgba(255,152,0,0.8);line-height:1.6;
+  text-align:left;
+}
+.uuid-warn strong{color:var(--orange);}
+
+.uuid-note{font-size:11px;color:rgba(255,255,255,0.2);margin-top:16px;line-height:1.7;}
+
+/* ════════════════════════════════════════════
+   SCREEN 3 — VERIFYING
+════════════════════════════════════════════ */
+#s-verify{background:rgba(4,2,22,0.95);backdrop-filter:blur(30px);text-align:center;}
+.verify-spinner{
+  width:56px;height:56px;
+  border:3px solid rgba(255,215,0,0.12);
+  border-top-color:var(--gold);
+  border-radius:50%;
+  animation:spin .9s linear infinite;
+  margin:0 auto 24px;
+}
+.verify-title{font-family:'Lilita One',cursive;font-size:22px;color:var(--gold);margin-bottom:8px;}
+.verify-sub{font-size:13px;color:var(--muted);}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ════════════════════════════════════════════
+   SCREEN 4 — ACCESS DENIED / EXPIRED
+════════════════════════════════════════════ */
+#s-denied{background:rgba(4,2,22,0.95);backdrop-filter:blur(30px);text-align:center;}
+.denied-icon{font-size:64px;margin-bottom:20px;}
+.denied-title{font-family:'Lilita One',cursive;font-size:26px;color:var(--red);margin-bottom:10px;}
+.denied-msg{font-size:14px;color:var(--muted);line-height:1.7;max-width:320px;}
+.denied-status{
+  margin-top:20px;display:inline-block;
+  background:rgba(255,68,68,0.1);border:1px solid rgba(255,68,68,0.25);
+  border-radius:20px;padding:6px 18px;
+  font-size:12px;font-weight:800;color:var(--red);letter-spacing:1px;
+}
+
+/* ════════════════════════════════════════════
+   SCREEN 5 — MAIN APP
+════════════════════════════════════════════ */
+#s-app{
+  position:fixed;inset:0;z-index:10;
+  overflow-y:auto;
+  display:none; /* toggled via JS, not .active class */
+  flex-direction:column;
+  opacity:0;
+  transition:opacity .4s ease;
+}
+#s-app.active{display:flex;opacity:1;pointer-events:all;}
+
 /* ── SCROLL WRAP ── */
 #wrap{
   position:relative;z-index:1;
   max-width:440px;margin:0 auto;
-  padding:0 10px 56px;
+  padding:0 10px 56px;width:100%;
 }
 
 /* ════════════════════════════════
@@ -62,42 +271,31 @@ body{
 }
 .hdr-pill{
   display:inline-flex;align-items:center;gap:6px;
-  background:rgba(0,0,0,0.35);
-  border:1px solid rgba(255,255,255,0.16);
+  background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.16);
   border-radius:30px;padding:5px 14px;
-  font-size:12px;font-weight:700;color:var(--muted);
-  letter-spacing:1px;
+  font-size:12px;font-weight:700;color:var(--muted);letter-spacing:1px;
 }
 .ldot{
   width:7px;height:7px;border-radius:50%;
-  background:var(--green);
-  box-shadow:0 0 9px var(--green);
+  background:var(--green);box-shadow:0 0 9px var(--green);
   animation:blink 1.6s infinite;
 }
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
 
-/* ── Auto-refresh status bar ── */
 .auto-bar{
   width:100%;display:flex;align-items:center;justify-content:center;gap:8px;
-  margin-bottom:10px;
-  padding:8px 14px;
-  background:rgba(0,0,0,0.25);
-  border:1px solid rgba(255,255,255,0.08);
-  border-radius:12px;
-  font-size:12px;font-weight:700;color:var(--muted);
-  letter-spacing:0.5px;
+  margin-bottom:10px;padding:8px 14px;
+  background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.08);
+  border-radius:12px;font-size:12px;font-weight:700;color:var(--muted);letter-spacing:0.5px;
 }
 .auto-bar .cdot{
   width:6px;height:6px;border-radius:50%;
-  background:var(--cyan);
-  box-shadow:0 0 7px var(--cyan);
-  animation:blink 1.6s infinite;
-  flex-shrink:0;
+  background:var(--cyan);box-shadow:0 0 7px var(--cyan);
+  animation:blink 1.6s infinite;flex-shrink:0;
 }
 .auto-bar .cd{
   background:rgba(0,0,0,0.3);border-radius:20px;
-  padding:2px 10px;font-size:12px;
-  color:rgba(255,255,255,0.45);
+  padding:2px 10px;font-size:12px;color:rgba(255,255,255,0.45);
   font-family:'Share Tech Mono',monospace;
 }
 
@@ -105,20 +303,14 @@ body{
    GLASS CARD
 ════════════════════════════════ */
 .card{
-  background:var(--card);
-  backdrop-filter:blur(20px);
-  -webkit-backdrop-filter:blur(20px);
-  border:1px solid var(--cbord);
-  border-radius:var(--r);
-  padding:16px;
-  margin-bottom:10px;
+  background:var(--card);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border:1px solid var(--cbord);border-radius:var(--r);
+  padding:16px;margin-bottom:10px;
   box-shadow:0 8px 36px rgba(0,0,0,0.5);
 }
 .ctitle{
-  font-family:'Lilita One',cursive;
-  font-size:13px;letter-spacing:1.5px;
-  color:var(--gold);text-transform:uppercase;
-  margin-bottom:14px;
+  font-family:'Lilita One',cursive;font-size:13px;letter-spacing:1.5px;
+  color:var(--gold);text-transform:uppercase;margin-bottom:14px;
   display:flex;align-items:center;gap:8px;
 }
 .ctitle::after{content:'';flex:1;height:1px;background:rgba(255,215,0,0.18);}
@@ -127,13 +319,9 @@ body{
    ARENA CARD
 ════════════════════════════════ */
 .arena{
-  background:rgba(6,4,32,0.82);
-  backdrop-filter:blur(22px);
-  -webkit-backdrop-filter:blur(22px);
-  border:1px solid rgba(160,100,255,0.22);
-  border-radius:22px;
-  padding:16px 14px 18px;
-  margin-bottom:10px;
+  background:rgba(6,4,32,0.82);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);
+  border:1px solid rgba(160,100,255,0.22);border-radius:22px;
+  padding:16px 14px 18px;margin-bottom:10px;
   box-shadow:0 0 70px rgba(110,50,255,0.14),0 8px 40px rgba(0,0,0,0.65);
   position:relative;overflow:hidden;
 }
@@ -142,59 +330,37 @@ body{
   background:radial-gradient(ellipse 80% 55% at 50% 0%,rgba(150,70,255,0.09) 0%,transparent 65%);
   pointer-events:none;
 }
-
-/* Round row */
 .rrow{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
-.rnum{
-  font-family:'Lilita One',cursive;
-  font-size:22px;color:var(--gold);
-  text-shadow:0 0 18px rgba(255,215,0,0.5);
-}
+.rnum{font-family:'Lilita One',cursive;font-size:22px;color:var(--gold);text-shadow:0 0 18px rgba(255,215,0,0.5);}
 .rsub{font-size:10px;color:var(--muted);font-family:'Share Tech Mono',monospace;margin-top:2px;}
 .reset-pill{
-  font-size:10px;color:var(--muted);
-  font-family:'Share Tech Mono',monospace;
-  background:rgba(0,0,0,0.35);
-  border-radius:10px;padding:3px 9px;
+  font-size:10px;color:var(--muted);font-family:'Share Tech Mono',monospace;
+  background:rgba(0,0,0,0.35);border-radius:10px;padding:3px 9px;
   border:1px solid rgba(255,255,255,0.1);
 }
-
-/* Action banner */
 .abanner{
-  border-radius:13px;padding:11px 14px;
-  margin-bottom:18px;
+  border-radius:13px;padding:11px 14px;margin-bottom:18px;
   display:flex;align-items:center;gap:10px;
-  font-family:'Lilita One',cursive;
-  font-size:18px;
+  font-family:'Lilita One',cursive;font-size:18px;
 }
 .abanner.play{
   background:linear-gradient(135deg,rgba(0,230,118,0.15),rgba(0,230,118,0.05));
-  border:1.5px solid rgba(0,230,118,0.42);
-  color:var(--green);
+  border:1.5px solid rgba(0,230,118,0.42);color:var(--green);
   box-shadow:0 0 22px rgba(0,230,118,0.09);
 }
 .abanner.skip{
   background:linear-gradient(135deg,rgba(255,68,68,0.13),rgba(255,68,68,0.04));
-  border:1.5px solid rgba(255,68,68,0.35);
-  color:var(--red);
+  border:1.5px solid rgba(255,68,68,0.35);color:var(--red);
 }
 .aicon{font-size:24px;flex-shrink:0;line-height:1;}
 .asub{font-family:'Nunito',sans-serif;font-size:12px;font-weight:600;opacity:0.6;margin-top:2px;}
 
-/* ── Planet picks ── */
-.picks{
-  display:flex;align-items:center;justify-content:center;
-  gap:14px;margin-bottom:18px;
-}
+.picks{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:18px;}
 .ppick{display:flex;flex-direction:column;align-items:center;gap:7px;flex:1;}
 .ppick-rank{font-size:9px;font-weight:800;color:var(--muted);letter-spacing:2px;text-transform:uppercase;}
-.planet-wrap{
-  position:relative;width:92px;height:92px;
-  display:flex;align-items:center;justify-content:center;
-}
+.planet-wrap{position:relative;width:92px;height:92px;display:flex;align-items:center;justify-content:center;}
 .gring{
-  position:absolute;inset:-9px;border-radius:50%;
-  border:2px solid;opacity:0.45;
+  position:absolute;inset:-9px;border-radius:50%;border:2px solid;opacity:0.45;
   animation:gspin 7s linear infinite;
 }
 .gring.rev{animation-direction:reverse;animation-duration:5s;}
@@ -208,75 +374,43 @@ body{
 @keyframes pfloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
 .pname{font-family:'Lilita One',cursive;font-size:15px;text-align:center;line-height:1.1;}
 .pconf{font-size:11px;color:var(--muted);font-family:'Share Tech Mono',monospace;margin-top:1px;}
-.picks-or{
-  font-family:'Lilita One',cursive;font-size:22px;
-  color:rgba(255,255,255,0.25);flex-shrink:0;
-}
+.picks-or{font-family:'Lilita One',cursive;font-size:22px;color:rgba(255,255,255,0.25);flex-shrink:0;}
 
-/* ── Bonus section ── */
 .bonus-sec{
   background:linear-gradient(135deg,rgba(255,152,0,0.11),rgba(255,100,0,0.04));
-  border:1.5px solid rgba(255,152,0,0.38);
-  border-radius:14px;padding:13px 12px 10px;
-  margin-bottom:16px;
-  position:relative;overflow:hidden;
+  border:1.5px solid rgba(255,152,0,0.38);border-radius:14px;padding:13px 12px 10px;
+  margin-bottom:16px;position:relative;overflow:hidden;
 }
-.bonus-sec::after{
-  content:'🎰';position:absolute;right:6px;top:-2px;
-  font-size:44px;opacity:0.09;pointer-events:none;
-}
+.bonus-sec::after{content:'🎰';position:absolute;right:6px;top:-2px;font-size:44px;opacity:0.09;pointer-events:none;}
 .bonus-hdr{display:flex;align-items:center;gap:6px;margin-bottom:11px;}
 .bonus-title{font-family:'Lilita One',cursive;font-size:12px;letter-spacing:1px;color:var(--orange);text-transform:uppercase;}
 .bonus-tag2{
-  margin-left:auto;font-size:9px;font-weight:800;
-  color:rgba(255,152,0,0.6);
-  background:rgba(255,152,0,0.1);
-  border:1px solid rgba(255,152,0,0.22);
+  margin-left:auto;font-size:9px;font-weight:800;color:rgba(255,152,0,0.6);
+  background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.22);
   border-radius:20px;padding:2px 8px;
 }
 .bpicks{display:flex;align-items:center;justify-content:center;gap:10px;}
 .bpick{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;}
-.bplanet{
-  width:62px;height:62px;object-fit:contain;
-  animation:pfloat 3.8s ease-in-out infinite;
-  filter:drop-shadow(0 0 10px rgba(255,152,0,0.5));
-}
+.bplanet{width:62px;height:62px;object-fit:contain;animation:pfloat 3.8s ease-in-out infinite;filter:drop-shadow(0 0 10px rgba(255,152,0,0.5));}
 .bplanet.d1{animation-delay:-1.9s;}
 .bname{font-family:'Lilita One',cursive;font-size:12px;text-align:center;line-height:1.1;}
 .bconf{font-size:10px;color:rgba(255,152,0,0.5);font-family:'Share Tech Mono',monospace;}
 .bor{font-family:'Lilita One',cursive;font-size:16px;color:rgba(255,152,0,0.28);flex-shrink:0;}
 .bnote{margin-top:9px;text-align:center;font-size:10px;font-weight:800;color:rgba(255,152,0,0.55);letter-spacing:0.5px;}
 
-/* ── Entropy ── */
 .entrow{display:flex;justify-content:space-between;font-size:11px;margin-bottom:5px;color:var(--muted);font-weight:700;}
 .entval{font-family:'Share Tech Mono',monospace;}
 .enttrack{position:relative;height:6px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden;}
 .entfill{height:100%;border-radius:3px;transition:width .7s ease;}
 .entmark{position:absolute;top:0;bottom:0;width:2px;background:rgba(255,255,255,0.2);border-radius:1px;}
-.last10{
-  display:flex;flex-wrap:wrap;gap:4px;align-items:center;
-  margin-top:10px;font-size:10px;color:rgba(255,255,255,0.25);
-  font-family:'Share Tech Mono',monospace;
-}
+.last10{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:10px;font-size:10px;color:rgba(255,255,255,0.25);font-family:'Share Tech Mono',monospace;}
 .l10lbl{color:rgba(255,255,255,0.2);margin-right:3px;}
-.l10b{
-  display:inline-flex;align-items:center;justify-content:center;
-  width:22px;height:22px;border-radius:50%;
-  font-size:9px;font-weight:800;
-}
+.l10b{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-size:9px;font-weight:800;}
 
-/* ════════════════════════════════
-   SCORE BREAKDOWN
-════════════════════════════════ */
 .srow{
-  display:grid;
-  grid-template-columns:46px 1fr 70px 44px;
-  align-items:center;gap:7px;
-  padding:7px 10px;
-  border-radius:11px;margin-bottom:5px;
-  background:rgba(255,255,255,0.04);
-  border:1px solid transparent;
-  transition:all .2s;
+  display:grid;grid-template-columns:46px 1fr 70px 44px;
+  align-items:center;gap:7px;padding:7px 10px;border-radius:11px;margin-bottom:5px;
+  background:rgba(255,255,255,0.04);border:1px solid transparent;transition:all .2s;
 }
 .srow.spick{background:rgba(255,215,0,0.06);border-color:rgba(255,215,0,0.2);}
 .srow.sbonus{background:rgba(255,152,0,0.05);border-color:rgba(255,152,0,0.2);}
@@ -293,37 +427,23 @@ body{
 .srow.spick .spct{color:var(--gold);}
 .srow.sbonus .spct{color:var(--orange);}
 
-/* ════════════════════════════════
-   STATS GRID
-════════════════════════════════ */
 .sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;}
-.sbox{
-  background:rgba(255,255,255,0.05);
-  border:1px solid rgba(255,255,255,0.09);
-  border-radius:12px;padding:12px 6px;text-align:center;
-}
+.sbox{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:12px 6px;text-align:center;}
 .sval{font-family:'Lilita One',cursive;font-size:22px;color:var(--cyan);line-height:1;}
 .sval.g{color:var(--green);}.sval.w{color:var(--gold);}.sval.r{color:var(--red);}
 .slbl{font-size:10px;color:var(--muted);margin-top:3px;font-weight:700;letter-spacing:0.3px;}
 
-/* ════════════════════════════════
-   HISTORY STRIP
-════════════════════════════════ */
 .hstrip{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;}
 .hstrip::-webkit-scrollbar{display:none;}
 .hitem{
   flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:3px;
   padding:8px 6px;min-width:54px;
-  background:rgba(255,255,255,0.05);
-  border-radius:12px;border:1px solid rgba(255,255,255,0.08);
+  background:rgba(255,255,255,0.05);border-radius:12px;border:1px solid rgba(255,255,255,0.08);
 }
 .himg{width:36px;height:36px;object-fit:contain;}
 .hname{font-size:8px;font-weight:800;color:var(--muted);text-align:center;line-height:1.2;}
 .hrnd{font-size:8px;color:rgba(255,255,255,0.22);font-family:'Share Tech Mono',monospace;}
 
-/* ════════════════════════════════
-   LIVE RESULTS
-════════════════════════════════ */
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
 .chip{border-radius:20px;padding:4px 11px;font-size:12px;font-weight:800;border:1px solid;}
 .cg{background:rgba(0,230,118,0.10);color:var(--green);border-color:rgba(0,230,118,0.28);}
@@ -332,20 +452,12 @@ body{
 .co{background:rgba(255,152,0,0.10);color:var(--orange);border-color:rgba(255,152,0,0.24);}
 
 .rlist{display:flex;flex-direction:column;gap:5px;}
-.rrow2{
-  display:flex;align-items:center;gap:7px;
-  border-radius:11px;padding:8px 10px;
-  border:1px solid transparent;
-}
+.rrow2{display:flex;align-items:center;gap:7px;border-radius:11px;padding:8px 10px;border:1px solid transparent;}
 .rrow2.hit{background:rgba(0,230,118,0.06);border-color:rgba(0,230,118,0.17);}
 .rrow2.miss{background:rgba(255,68,68,0.05);border-color:rgba(255,68,68,0.14);}
 .rround{font-size:10px;color:var(--muted);width:40px;flex-shrink:0;font-family:'Share Tech Mono',monospace;}
 .rpreds{display:flex;gap:3px;flex:1;flex-wrap:wrap;align-items:center;}
-.rball{
-  width:28px;height:28px;border-radius:6px;
-  display:flex;align-items:center;justify-content:center;
-  background:rgba(255,255,255,0.06);overflow:hidden;
-}
+.rball{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.06);overflow:hidden;}
 .rball img{width:24px;height:24px;object-fit:contain;}
 .rball.bball{outline:1.5px dashed rgba(255,152,0,0.4);outline-offset:1px;opacity:0.65;}
 .rsep{font-size:10px;color:rgba(255,152,0,0.4);font-weight:800;}
@@ -354,18 +466,15 @@ body{
 .rbadge{padding:2px 8px;border-radius:20px;font-size:11px;font-weight:800;white-space:nowrap;}
 .rbadge.hit{background:rgba(0,230,118,0.12);color:var(--green);border:1px solid rgba(0,230,118,0.28);}
 .rbadge.miss{background:rgba(255,68,68,0.10);color:var(--red);border:1px solid rgba(255,68,68,0.24);}
-
 .lscroll{max-height:450px;overflow-y:auto;margin:0 -16px;padding:0 16px 16px;}
 .lscroll::-webkit-scrollbar{width:3px;}
 .lscroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.14);border-radius:2px;}
 
-/* ── misc ── */
 .errbanner{background:rgba(255,68,68,0.08);border:1px solid rgba(255,68,68,0.28);border-radius:12px;padding:10px 14px;margin-bottom:10px;font-size:12px;}
 .errt{color:var(--red);font-weight:800;margin-bottom:3px;}
 .errm{color:rgba(255,120,120,0.8);}
 .loading{text-align:center;padding:60px 20px;color:var(--muted);}
 .spinner{width:40px;height:40px;border:3px solid rgba(255,215,0,0.1);border-top-color:var(--gold);border-radius:50%;animation:spin .9s linear infinite;margin:0 auto 16px;}
-@keyframes spin{to{transform:rotate(360deg)}}
 .disc{text-align:center;font-size:10px;color:rgba(255,255,255,0.18);padding:16px 0;letter-spacing:1px;font-weight:700;}
 
 @media(max-width:360px){
@@ -376,36 +485,449 @@ body{
 </head>
 <body>
 <div id="bg"></div>
-<div id="wrap">
 
-  <!-- HEADER -->
-  <div class="hdr">
-    <div class="hdr-title">✨ TREASURE AI ✨</div>
-    <div class="hdr-pill">
-      <span class="ldot"></span>
-      <span id="statusText">Connecting...</span>
+<!-- ═══════════════════════════════════════════════
+     SCREEN 1: Browser Gate (not a PWA)
+═══════════════════════════════════════════════ -->
+<div class="screen" id="s-browser">
+  <div class="gate-logo">✨ TREASURE AI ✨</div>
+  <div class="gate-sub">INSTALL REQUIRED TO ACCESS</div>
+
+  <div class="gate-card">
+    <div class="gate-icon">📲</div>
+    <div class="gate-title">App Install Required</div>
+    <div class="gate-desc">
+      Treasure AI works as an installed app only.<br>
+      Direct browser access is disabled for security.
+    </div>
+    <button class="install-btn" id="installBtn" disabled>
+      <span>⏳</span> Preparing Install...
+    </button>
+  </div>
+
+  <!-- Android Chrome steps (shown by default) -->
+  <div class="gate-steps" id="androidSteps">
+    <div class="gate-steps-title">How to Install</div>
+    <div class="step"><div class="step-n">1</div><div>Tap <strong style="color:#fff">Install</strong> button above when it appears</div></div>
+    <div class="step"><div class="step-n">2</div><div>Or tap <strong style="color:#fff">⋮ Menu → Add to Home screen</strong></div></div>
+    <div class="step"><div class="step-n">3</div><div>Open the installed app from your home screen</div></div>
+  </div>
+
+  <!-- iOS Safari steps -->
+  <div class="gate-steps ios-steps" id="iosSteps">
+    <div class="gate-steps-title">Install on iPhone / iPad</div>
+    <div class="step"><div class="step-n">1</div><div>Open this page in <strong style="color:#fff">Safari</strong> browser</div></div>
+    <div class="step"><div class="step-n">2</div><div>Tap the <strong style="color:#fff">Share ⬆</strong> button at the bottom</div></div>
+    <div class="step"><div class="step-n">3</div><div>Tap <strong style="color:#fff">Add to Home Screen</strong> → Add</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SCREEN 2: UUID Reveal (first time in PWA)
+═══════════════════════════════════════════════ -->
+<div class="screen" id="s-uuid">
+  <div class="uuid-logo">✨ TREASURE AI ✨</div>
+  <div class="uuid-badge">YOUR ACCESS KEY</div>
+
+  <div class="uuid-card">
+    <div class="uuid-card-title">🔑 Your Unique ID</div>
+    <div class="uuid-card-desc">
+      This is your personal access key. Share it with the admin to get access activated. Once activated, this app will unlock automatically.
+    </div>
+
+    <div class="uuid-box">
+      <div class="uuid-label">Device UUID</div>
+      <div class="uuid-val" id="uuidDisplay">Generating...</div>
+    </div>
+
+    <button class="copy-btn" id="copyBtn">
+      <span>📋</span> Copy UUID
+    </button>
+
+    <div class="uuid-warn">
+      <strong>⚠ Important:</strong> This UUID is stored only on this device. Do not uninstall the app or clear app data — your UUID will change and you'll need re-activation.
     </div>
   </div>
 
-  <!-- AUTO REFRESH BAR (replaces button) -->
-  <div class="auto-bar">
-    <span class="cdot"></span>
-    Auto-refreshing in
-    <span class="cd"><span id="cdNum">5</span>s</span>
+  <div class="uuid-note">
+    After sharing your UUID with admin,<br>close and reopen the app to check access.
   </div>
+</div>
 
-  <!-- APP -->
-  <div id="app">
-    <div class="loading">
-      <div class="spinner"></div>
-      <div>Loading prediction...</div>
+<!-- ═══════════════════════════════════════════════
+     SCREEN 3: Verifying
+═══════════════════════════════════════════════ -->
+<div class="screen" id="s-verify">
+  <div class="verify-spinner"></div>
+  <div class="verify-title">Verifying Access...</div>
+  <div class="verify-sub">Please wait a moment</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SCREEN 4: Access Denied / Expired
+═══════════════════════════════════════════════ -->
+<div class="screen" id="s-denied">
+  <div class="denied-icon" id="deniedIcon">🚫</div>
+  <div class="denied-title" id="deniedTitle">Access Denied</div>
+  <div class="denied-msg" id="deniedMsg">Your UUID has not been activated yet. Please contact the admin and share your UUID to get access.</div>
+  <div class="denied-status" id="deniedStatus">NO ACCESS</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SCREEN 5: Main App
+═══════════════════════════════════════════════ -->
+<div id="s-app">
+  <div id="wrap">
+    <div class="hdr">
+      <div class="hdr-title">✨ TREASURE AI ✨</div>
+      <div class="hdr-pill">
+        <span class="ldot"></span>
+        <span id="statusText">Connecting...</span>
+      </div>
+    </div>
+    <div class="auto-bar">
+      <span class="cdot"></span>
+      Auto-refreshing in
+      <span class="cd"><span id="cdNum">5</span>s</span>
+    </div>
+    <div id="app">
+      <div class="loading">
+        <div class="spinner"></div>
+        <div>Loading prediction...</div>
+      </div>
     </div>
   </div>
-
 </div>
 
 <script>
-/* ── ASSETS ─────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════
+   CONFIG — MUST match worker.js
+════════════════════════════════════════════════════ */
+const SHARED_SECRET   = "TreasureAI-S3cr3t-K3y-Change-This-2025!xQ9mZ";
+const WORKER_URL      = "https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev/verify";
+//                       ↑ Replace with your Cloudflare Worker URL
+
+const IDB_DB_NAME     = "TreasureAI";
+const IDB_STORE       = "auth";
+const IDB_UUID_KEY    = "uuid";
+const IDB_ACCESS_KEY  = "access_cache";  // cache last valid auth result
+const ACCESS_CACHE_MS = 30 * 60 * 1000; // re-verify every 30 minutes
+
+/* ════════════════════════════════════════════════════
+   SCREEN MANAGER
+════════════════════════════════════════════════════ */
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const appEl = document.getElementById('s-app');
+  appEl.classList.remove('active');
+
+  if (id === 's-app') {
+    appEl.classList.add('active');
+  } else {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('active');
+  }
+}
+
+/* ════════════════════════════════════════════════════
+   INDEXED DB HELPERS
+════════════════════════════════════════════════════ */
+function openDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(IDB_DB_NAME, 1);
+    req.onupgradeneeded = e => {
+      e.target.result.createObjectStore(IDB_STORE);
+    };
+    req.onsuccess = e => res(e.target.result);
+    req.onerror   = e => rej(e.target.error);
+  });
+}
+
+async function idbGet(key) {
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const tx  = db.transaction(IDB_STORE, 'readonly');
+    const req = tx.objectStore(IDB_STORE).get(key);
+    req.onsuccess = e => res(e.target.result);
+    req.onerror   = e => rej(e.target.error);
+  });
+}
+
+async function idbSet(key, value) {
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const tx  = db.transaction(IDB_STORE, 'readwrite');
+    const req = tx.objectStore(IDB_STORE).put(value, key);
+    req.onsuccess = () => res();
+    req.onerror   = e  => rej(e.target.error);
+  });
+}
+
+/* ════════════════════════════════════════════════════
+   UUID GENERATION (crypto random, stored in IndexedDB)
+════════════════════════════════════════════════════ */
+function generateUUID() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant
+  const hex = Array.from(bytes).map(b => b.toString(16).padStart(2,'0')).join('');
+  return [
+    hex.slice(0,8), hex.slice(8,12), hex.slice(12,16),
+    hex.slice(16,20), hex.slice(20)
+  ].join('-');
+}
+
+async function getOrCreateUUID() {
+  let uuid = await idbGet(IDB_UUID_KEY);
+  if (!uuid) {
+    uuid = generateUUID();
+    await idbSet(IDB_UUID_KEY, uuid);
+  }
+  return uuid;
+}
+
+/* ════════════════════════════════════════════════════
+   HMAC SIGNING (Web Crypto API — same algo as worker)
+════════════════════════════════════════════════════ */
+async function hmacSign(payload, secret) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw', enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(payload));
+  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+/* ════════════════════════════════════════════════════
+   VERIFY UUID with Cloudflare Worker
+════════════════════════════════════════════════════ */
+async function verifyWithWorker(uuid) {
+  const ts      = Math.floor(Date.now() / 1000);
+  const payload = `${uuid}:${ts}`;
+  const sig     = await hmacSign(payload, SHARED_SECRET);
+
+  const resp = await fetch(WORKER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ uuid, ts, sig }),
+  });
+
+  if (!resp.ok) {
+    throw new Error(`HTTP ${resp.status}`);
+  }
+
+  const data = await resp.json();
+
+  // Validate response timestamp (anti-replay on response side)
+  if (data._ts) {
+    const serverTs = Number(data._ts);
+    const now      = Math.floor(Date.now() / 1000);
+    if (Math.abs(now - serverTs) > 25) { // 25s window (5s buffer for network)
+      throw new Error('Response timestamp invalid');
+    }
+  }
+
+  return data;
+}
+
+/* ════════════════════════════════════════════════════
+   PWA DETECTION
+════════════════════════════════════════════════════ */
+function isRunningAsPWA() {
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.navigator.standalone === true ||  // iOS Safari
+    document.referrer.includes('android-app://')
+  );
+}
+
+function isIOS() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+
+/* ════════════════════════════════════════════════════
+   MAIN BOOT FLOW
+════════════════════════════════════════════════════ */
+async function boot() {
+  // 1. Check if running as PWA
+  if (!isRunningAsPWA()) {
+    showScreen('s-browser');
+    initInstallFlow();
+    return;
+  }
+
+  // 2. Get or create UUID
+  let uuid;
+  try {
+    uuid = await getOrCreateUUID();
+  } catch(e) {
+    console.error('IDB error', e);
+    // Fallback: show UUID screen with error
+    showScreen('s-uuid');
+    document.getElementById('uuidDisplay').textContent = 'Storage error — try reinstalling app';
+    return;
+  }
+
+  // 3. Check local access cache first (skip network if recently verified)
+  let cache;
+  try {
+    cache = await idbGet(IDB_ACCESS_KEY);
+  } catch { cache = null; }
+
+  if (cache && cache.ok && (Date.now() - cache.cachedAt) < ACCESS_CACHE_MS) {
+    // Still within cache window — go straight to app
+    launchApp();
+    return;
+  }
+
+  // 4. Show verifying screen
+  showScreen('s-verify');
+
+  // 5. Try network verification
+  let result;
+  try {
+    result = await verifyWithWorker(uuid);
+  } catch(e) {
+    console.warn('Verify failed:', e);
+    // Network error — if we had any previous cached valid access, allow in (grace period)
+    if (cache && cache.ok) {
+      launchApp();
+      return;
+    }
+    // No cache, no network — show UUID screen (first-time user, no access yet)
+    showUUIDScreen(uuid);
+    return;
+  }
+
+  if (result.ok && result.status === 'active') {
+    // Cache this success
+    try {
+      await idbSet(IDB_ACCESS_KEY, { ok: true, cachedAt: Date.now(), expiry: result.expiry });
+    } catch {}
+    launchApp();
+  } else if (result.status === 'expired') {
+    // Clear cache
+    try { await idbSet(IDB_ACCESS_KEY, null); } catch {}
+    showDenied('expired');
+  } else {
+    // not_found or other
+    try { await idbSet(IDB_ACCESS_KEY, null); } catch {}
+    showUUIDScreen(uuid);
+  }
+}
+
+function showUUIDScreen(uuid) {
+  showScreen('s-uuid');
+  document.getElementById('uuidDisplay').textContent = uuid;
+
+  const copyBtn = document.getElementById('copyBtn');
+  copyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(uuid);
+      copyBtn.innerHTML = '<span>✅</span> Copied!';
+      copyBtn.classList.add('copied');
+      setTimeout(() => {
+        copyBtn.innerHTML = '<span>📋</span> Copy UUID';
+        copyBtn.classList.remove('copied');
+      }, 2500);
+    } catch {
+      // Fallback
+      const ta = document.createElement('textarea');
+      ta.value = uuid;
+      ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      copyBtn.innerHTML = '<span>✅</span> Copied!';
+      copyBtn.classList.add('copied');
+      setTimeout(() => {
+        copyBtn.innerHTML = '<span>📋</span> Copy UUID';
+        copyBtn.classList.remove('copied');
+      }, 2500);
+    }
+  });
+}
+
+function showDenied(reason) {
+  showScreen('s-denied');
+  const icon  = document.getElementById('deniedIcon');
+  const title = document.getElementById('deniedTitle');
+  const msg   = document.getElementById('deniedMsg');
+  const stat  = document.getElementById('deniedStatus');
+
+  if (reason === 'expired') {
+    icon.textContent  = '⏰';
+    title.textContent = 'Access Expired';
+    msg.textContent   = 'Your access period has ended. Please contact the admin to renew your subscription.';
+    stat.textContent  = 'EXPIRED';
+  } else {
+    icon.textContent  = '🚫';
+    title.textContent = 'Access Denied';
+    msg.textContent   = 'Your UUID has not been activated. Share your UUID with the admin to get access.';
+    stat.textContent  = 'NO ACCESS';
+  }
+}
+
+/* ════════════════════════════════════════════════════
+   INSTALL FLOW (Browser Gate Screen)
+════════════════════════════════════════════════════ */
+let deferredPrompt = null;
+
+function initInstallFlow() {
+  const btn = document.getElementById('installBtn');
+
+  // Detect iOS
+  if (isIOS()) {
+    document.getElementById('androidSteps').style.display = 'none';
+    document.getElementById('iosSteps').style.display = 'block';
+    btn.innerHTML = '<span>📱</span> See Install Steps Above';
+    btn.disabled = false;
+    btn.style.opacity = '0.7';
+    return;
+  }
+
+  // Android Chrome — listen for beforeinstallprompt
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredPrompt = e;
+    btn.innerHTML  = '<span>📲</span> Install Treasure AI';
+    btn.disabled   = false;
+
+    btn.addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      if (outcome === 'accepted') {
+        btn.innerHTML = '<span>✅</span> Installing...';
+        btn.disabled  = true;
+      }
+    });
+  });
+
+  // If app is already installed but opened in browser tab
+  window.addEventListener('appinstalled', () => {
+    btn.innerHTML = '<span>✅</span> App Installed! Open from home screen';
+    btn.disabled  = true;
+  });
+
+  // Timeout — if prompt never fires (already installed, or unsupported)
+  setTimeout(() => {
+    if (btn.disabled && !deferredPrompt) {
+      btn.innerHTML = '<span>⋮</span> Use Menu → Add to Home Screen';
+      btn.disabled  = false;
+      btn.style.opacity = '0.7';
+    }
+  }, 3000);
+}
+
+/* ════════════════════════════════════════════════════
+   APP LAUNCH — prediction UI (unchanged logic)
+════════════════════════════════════════════════════ */
 const BALL = {
   1:'https://m.starmakerstudios.com/cdn/vue/agile-vue3/views/spa-rhapsody-music/web-sync/img/new/ball/ball1-a991f.png',
   2:'https://m.starmakerstudios.com/cdn/vue/agile-vue3/views/spa-rhapsody-music/web-sync/img/new/ball/ball2-f05ee.png',
@@ -425,14 +947,12 @@ const img = (idx, cls='', sty='') =>
 
 let cdEl=null, countdown=5, lastRound=null;
 
-/* ── BUILD UI ────────────────────────────────────────── */
 function buildUI(pred, stats, history, status) {
   const isPlay = pred.action==='PLAY';
   const bonus  = pred.bonus_picks||null;
   const p1=pred.pred1, p2=pred.pred2;
   const c1=COLORS[p1]||'#fff', c2=COLORS[p2]||'#fff';
 
-  /* round header — no "Round" label, just the number */
   const nr = status&&status.next_reset_in;
   const roundHdr = `
     <div class="rrow">
@@ -443,7 +963,6 @@ function buildUI(pred, stats, history, status) {
       ${nr?`<div class="reset-pill">Reset ${nr}</div>`:''}
     </div>`;
 
-  /* action banner */
   const abanner = `
     <div class="abanner ${isPlay?'play':'skip'}">
       <div class="aicon">${isPlay?'✅':'⏭'}</div>
@@ -453,7 +972,6 @@ function buildUI(pred, stats, history, status) {
       </div>
     </div>`;
 
-  /* planet picks */
   const picks = `
     <div class="picks">
       <div class="ppick">
@@ -477,7 +995,6 @@ function buildUI(pred, stats, history, status) {
       </div>
     </div>`;
 
-  /* bonus */
   let bonusHTML = '';
   if (isPlay && bonus && bonus.length) {
     const b1=bonus[0], b2=bonus[1]||null;
@@ -507,7 +1024,6 @@ function buildUI(pred, stats, history, status) {
       </div>`;
   }
 
-  /* entropy */
   const ep  = Math.min(100,(pred.entropy/3)*100);
   const ec  = pred.entropy<2?'#00e676':pred.entropy<2.7?'#facc15':'#ff4444';
   const tp  = (2.7/3)*100;
@@ -525,7 +1041,6 @@ function buildUI(pred, stats, history, status) {
       <div class="last10"><span class="l10lbl">LAST 10 ›</span>${l10}</div>
     </div>`;
 
-  /* score breakdown */
   const bset = new Set((bonus||[]).map(b=>b.idx));
   const scores = Object.entries(pred.all_scores||{})
     .sort((a,b)=>b[1]-a[1])
@@ -545,7 +1060,6 @@ function buildUI(pred, stats, history, status) {
       </div>`;
     }).join('');
 
-  /* sim stats */
   const ac=(stats.accuracy||0)>=60?'g':'w';
   const simStats=`
     <div class="sgrid">
@@ -557,7 +1071,6 @@ function buildUI(pred, stats, history, status) {
       <div class="sbox"><div class="sval">${fmt(stats.played)}</div><div class="slbl">Played</div></div>
     </div>`;
 
-  /* history strip */
   const hist=(history||[]).map(h=>{
     const nm=NAMES[h.reward_index]||h.reward_index;
     return `<div class="hitem">
@@ -567,7 +1080,6 @@ function buildUI(pred, stats, history, status) {
     </div>`;
   }).join('');
 
-  /* live results */
   const le=(stats.live_log||[]).slice().reverse();
   const lh=le.filter(r=>r.hit).length, lm=le.length-lh;
   const la=le.length?(lh/le.length*100).toFixed(1):null;
@@ -590,42 +1102,17 @@ function buildUI(pred, stats, history, status) {
     </div>`;
   }).join('');
 
-  /* error */
   const fe=status&&status.status==='error';
   const err=fe?`<div class="errbanner"><div class="errt">⚠ API Error — data may be stale</div><div class="errm">${status.last_error||''}</div></div>`:'';
 
-  /* ── FINAL HTML — new section order ── */
   document.getElementById('app').innerHTML=`
     ${err}
-
-    <!-- 1. Prediction arena -->
     <div class="arena">
-      ${roundHdr}
-      ${abanner}
-      ${picks}
-      ${bonusHTML}
-      ${entropy}
+      ${roundHdr}${abanner}${picks}${bonusHTML}${entropy}
     </div>
-
-    <!-- 2. Recent History -->
-    ${hist?`<div class="card">
-      <div class="ctitle">Recent History</div>
-      <div class="hstrip">${hist}</div>
-    </div>`:''}
-
-    <!-- 3. Score Breakdown -->
-    <div class="card">
-      <div class="ctitle">Score Breakdown</div>
-      ${scores}
-    </div>
-
-    <!-- 4. Simulation Stats -->
-    <div class="card">
-      <div class="ctitle">Simulation Stats</div>
-      ${simStats}
-    </div>
-
-    <!-- 5. Live Results -->
+    ${hist?`<div class="card"><div class="ctitle">Recent History</div><div class="hstrip">${hist}</div></div>`:''}
+    <div class="card"><div class="ctitle">Score Breakdown</div>${scores}</div>
+    <div class="card"><div class="ctitle">Simulation Stats</div>${simStats}</div>
     ${le.length?`<div class="card" style="padding-bottom:0">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <div class="ctitle" style="margin:0">Live Results</div>
@@ -639,11 +1126,9 @@ function buildUI(pred, stats, history, status) {
       </div>
       <div class="lscroll"><div class="rlist">${lrows}</div></div>
     </div>`:''}
-
     <div class="disc">PREDICTIONS ARE PROBABILISTIC · NOT FINANCIAL ADVICE</div>`;
 
   cdEl=document.getElementById('cdNum');
-
   if(lastRound&&pred.latest_round>lastRound){
     const el=document.querySelector('.arena');
     if(el){el.style.boxShadow='0 0 70px rgba(255,215,0,0.22)';setTimeout(()=>el.style.boxShadow='',2200);}
@@ -651,7 +1136,6 @@ function buildUI(pred, stats, history, status) {
   lastRound=pred.latest_round;
 }
 
-/* ── FETCH ───────────────────────────────────────────── */
 async function refreshAll(){
   try{
     document.getElementById('statusText').textContent='Refreshing...';
@@ -672,13 +1156,27 @@ async function refreshAll(){
   }
 }
 
-setInterval(()=>{
-  countdown--;
-  if(cdEl)cdEl.textContent=Math.max(0,countdown);
-  if(countdown<=0){countdown=5;refreshAll();}
-},1000);
+function launchApp() {
+  showScreen('s-app');
+  refreshAll();
+  setInterval(()=>{
+    countdown--;
+    if(cdEl)cdEl.textContent=Math.max(0,countdown);
+    if(countdown<=0){countdown=5;refreshAll();}
+  },1000);
+}
 
-refreshAll();
+/* ════════════════════════════════════════════════════
+   SERVICE WORKER REGISTRATION
+════════════════════════════════════════════════════ */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(console.warn);
+}
+
+/* ════════════════════════════════════════════════════
+   BOOT
+════════════════════════════════════════════════════ */
+boot();
 </script>
 </body>
 </html>
