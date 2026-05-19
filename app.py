@@ -9,22 +9,19 @@ app = Flask(__name__)
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 DATA_FILE              = "round_data.json"
 SKIP_TOP1_THRESHOLD    = 0.220
-SKIP_ENTROPY_THRESHOLD = 2.70   # base value — gets adapted dynamically
+SKIP_ENTROPY_THRESHOLD = 2.70
 BRAKE_TRIGGER          = 3
 BRAKE_PAUSE            = 3
 TRAIN_ROUNDS           = 50
 POLL_INTERVAL          = 5
 
-# High-multiplier classes to watch for bonus picks
-HIGH_MULT_CLASSES      = {2, 3, 4, 7}   # 10x, 25x, 15x, 50x
+HIGH_MULT_CLASSES      = {2, 3, 4, 7}
 
-# Adaptive threshold config
 TARGET_PLAY_MIN  = 0.38
 TARGET_PLAY_MAX  = 0.45
 ENT_THRESH_MIN   = 2.65
 ENT_THRESH_MAX   = 2.90
 
-# Daily reset: every day at 05:30 AM IST (UTC+5:30)
 RESET_HOUR_IST   = 5
 RESET_MINUTE_IST = 30
 IST              = pytz.timezone("Asia/Kolkata")
@@ -48,42 +45,44 @@ _brake_left        = 0
 _live_log          = []
 _pending_pred      = None
 _entropy_threshold = SKIP_ENTROPY_THRESHOLD
+_last_reset_date   = None
+
+# ── CACHED PREDICTION ─────────────────────────────────────────────────────────
+# Computed ONCE per new round inside fetcher_loop.
+# All /api/predict calls just read this dict — zero Markov computation per request.
+# 1 user or 10000 users: same cost.
+_cached_pred = None  # public fields + internal "_" fields stripped before sending
+
 _fetch_status = {
     "last_attempt": None, "last_success": None,
-    "last_error": None,   "total_fetched": 0,
+    "last_error":   None, "total_fetched": 0,
     "status": "starting", "last_reset": None,
 }
-_last_reset_date = None
 
-# ── DAILY RESET LOGIC ─────────────────────────────────────────────────────────
+# ── DAILY RESET ───────────────────────────────────────────────────────────────
 def _should_reset():
     global _last_reset_date
     now_ist  = datetime.now(IST)
     today    = now_ist.date()
     past_530 = (now_ist.hour > RESET_HOUR_IST or
                 (now_ist.hour == RESET_HOUR_IST and now_ist.minute >= RESET_MINUTE_IST))
-    if past_530 and _last_reset_date != today:
-        return True
-    return False
+    return past_530 and _last_reset_date != today
 
 def _do_reset():
-    global _last_reset_date, _pending_pred
+    global _last_reset_date, _pending_pred, _cached_pred
     now_ist = datetime.now(IST)
-    today   = now_ist.date()
-    print(f"[Reset] 5:30 AM IST reached — wiping data for new day ({today})")
+    print(f"[Reset] 5:30 AM IST — wiping data ({now_ist.date()})")
     if os.path.exists(DATA_FILE):
         os.remove(DATA_FILE)
-        print(f"[Reset] {DATA_FILE} deleted")
     with _lock:
-        _rewards.clear()
-        _raw_rounds.clear()
-        _sim_stats.clear()
-        _live_log.clear()
-        _pending_pred   = None
+        _rewards.clear(); _raw_rounds.clear()
+        _sim_stats.clear(); _live_log.clear()
+        _pending_pred = None
+        _cached_pred  = None
         _fetch_status["last_reset"] = now_ist.strftime("%d %b %Y %H:%M IST")
         _fetch_status["status"]     = "reset_done"
-    _last_reset_date = today
-    print(f"[Reset] All data cleared. Waiting for new rounds from API...")
+    _last_reset_date = now_ist.date()
+    print("[Reset] All data cleared.")
 
 # ── FILE HELPERS ──────────────────────────────────────────────────────────────
 def _load_file():
@@ -114,7 +113,7 @@ def fetch_new():
         except Exception as e:
             err = str(e)
             if "403" in err or "401" in err:
-                err = "AUTH FAILED (403) — Cookie expired! Update FETCH_HEADERS in app.py"
+                err = "AUTH FAILED (403) — Cookie expired!"
             print(f"[Fetcher] {err}")
             with _lock:
                 _fetch_status["last_error"] = err
@@ -138,75 +137,6 @@ def fetch_new():
         _save_file(all_recs)
         return len(new_recs), all_recs
     return 0, existing
-
-def fetcher_loop():
-    global _pending_pred
-    while True:
-        try:
-            if _should_reset():
-                _do_reset()
-                time.sleep(POLL_INTERVAL)
-                continue
-
-            with _lock:
-                _fetch_status["last_attempt"] = time.strftime("%H:%M:%S")
-                _fetch_status["status"]       = "fetching"
-
-            count, records = fetch_new()
-
-            with _lock:
-                if count > 0:
-                    _fetch_status["last_success"]  = time.strftime("%H:%M:%S")
-                    _fetch_status["total_fetched"] += count
-                    _fetch_status["last_error"]    = None
-                    _fetch_status["status"]        = "ok"
-                else:
-                    if _fetch_status.get("status") != "error":
-                        _fetch_status["status"] = "ok_no_new"
-
-            if count > 0:
-                rewards = [r["reward_index"] for r in records]
-                with _lock:
-                    _raw_rounds.clear(); _raw_rounds.extend(records)
-                    _rewards.clear();    _rewards.extend(rewards)
-                    pending = _pending_pred
-
-                if pending is not None:
-                    pred_round = pending["round"]
-                    actual_rec = next((r for r in records if r["round"] == pred_round), None)
-                    if actual_rec is not None:
-                        actual_val = actual_rec["reward_index"]
-                        # Hit check: top2 OR bonus_picks (if any)
-                        all_preds  = list(pending["top2"])
-                        if pending.get("bonus_picks"):
-                            all_preds += [p for p in pending["bonus_picks"] if p not in all_preds]
-                        hit = actual_val in all_preds
-                        entry = {
-                            "round":       pred_round,
-                            "top2":        pending["top2"],
-                            "bonus_picks": pending.get("bonus_picks"),
-                            "actual":      actual_val,
-                            "hit":         hit,
-                            "action":      "PLAY",
-                        }
-                        with _lock:
-                            _live_log.append(entry)
-                            _pending_pred = None
-                        print(f"[Live] #{pred_round}: pred={pending['top2']} "
-                              f"bonus={pending.get('bonus_picks')} "
-                              f"actual={actual_val} -> {'HIT' if hit else 'MISS'}")
-
-                _rebuild_sim()
-                with _lock:
-                    lr = _raw_rounds[-1]["round"] if _raw_rounds else "?"
-                print(f"[Fetcher] +{count} rounds. Latest: #{lr}. Total: {len(records)}")
-
-        except Exception as e:
-            print(f"[Fetcher] Unexpected: {e}")
-            with _lock:
-                _fetch_status["last_error"] = str(e)
-                _fetch_status["status"]     = "error"
-        time.sleep(POLL_INTERVAL)
 
 # ── MARKOV ENGINE ─────────────────────────────────────────────────────────────
 def build_trans(seq, order):
@@ -293,58 +223,29 @@ def should_play(t1, ent, brake_active=False):
 
 # ── BONUS PICK LOGIC ──────────────────────────────────────────────────────────
 def get_bonus_picks(scores, top2):
-    """
-    Returns top-2 high-multiplier classes (2,3,4,7) by score if EITHER:
-      1. At least one of them appears in top-4 by rank, OR
-      2. At least one of them has probability > 10%
-    Returns None if neither condition is met.
-    """
-    ranked = sorted(scores.items(), key=lambda x: -x[1])
+    ranked     = sorted(scores.items(), key=lambda x: -x[1])
     ranked_ids = [int(k) for k, _ in ranked]
-
-    # Condition 1: any HIGH_MULT_CLASS in top-4 by rank
-    top4 = set(ranked_ids[:4])
-    in_top4 = bool(top4.intersection(HIGH_MULT_CLASSES))
-
-    # Condition 2: any HIGH_MULT_CLASS has score > 10%
-    above_10pct = any(
-        scores.get(k, scores.get(str(k), 0)) > 0.10
-        for k in HIGH_MULT_CLASSES
-    )
-
-    if not in_top4 and not above_10pct:
-        return None  # neither condition met, no bonus
-
-    # Get top-2 from HIGH_MULT_CLASSES by score
-    hm_ranked = [
-        (int(k), v) for k, v in ranked
-        if int(k) in HIGH_MULT_CLASSES
-    ]
-    if not hm_ranked:
+    in_top4    = bool(set(ranked_ids[:4]).intersection(HIGH_MULT_CLASSES))
+    above_10   = any(scores.get(k, scores.get(str(k), 0)) > 0.10 for k in HIGH_MULT_CLASSES)
+    if not in_top4 and not above_10:
         return None
+    hm = [(int(k), v) for k, v in ranked if int(k) in HIGH_MULT_CLASSES]
+    if not hm:
+        return None
+    bonus = [cls for cls, _ in hm[:2]]
+    if not [b for b in bonus if b not in top2]:
+        return None
+    return bonus
 
-    # Pick top-2 high-mult classes (can overlap with top2 — frontend will handle display)
-    bonus = [cls for cls, _ in hm_ranked[:2]]
-
-    # Only return if bonus adds something not already in top2
-    extra = [b for b in bonus if b not in top2]
-    if not extra:
-        return None  # top2 already covers the high-mult picks
-
-    return bonus  # always return top-2 high-mult even if one overlaps
-
-# ── SIMULATION ────────────────────────────────────────────────────────────────
-def _rebuild_sim():
-    global _sim_stats, _brake_left
-    with _lock:
-        rewards=list(_rewards)
-    total=len(rewards)
-    if total<TRAIN_ROUNDS+5: return
-
-    stats=build_global_stats(rewards)
+# ── SIM REBUILD ───────────────────────────────────────────────────────────────
+def _run_sim(rewards):
+    """Pure function — returns (sim_dict, brake_left, play_pct). No global writes."""
+    total = len(rewards)
+    if total < TRAIN_ROUNDS + 5:
+        return {}, 0, 0.0
+    stats = build_global_stats(rewards)
     hits=misses=sk=pl=0; ls=mx=ws=mw=0; brake=0; se=st=sb=0
-
-    for i in range(TRAIN_ROUNDS,total-1):
+    for i in range(TRAIN_ROUNDS, total - 1):
         h=rewards[:i+1]; tn=rewards[i+1]
         top2,_,ent,t1s,_=score_round(h,*stats)
         ba=brake>0
@@ -360,176 +261,292 @@ def _rebuild_sim():
         if hit: hits+=1;ls=0;ws+=1;mw=max(mw,ws)
         else: misses+=1;ls+=1;mx=max(mx,ls);ws=0
         if ls>=BRAKE_TRIGGER: brake=BRAKE_PAUSE
+    sim_total = total - TRAIN_ROUNDS - 1
+    acc       = hits / pl * 100 if pl else 0
+    play_pct  = pl / sim_total if sim_total else 0.0
+    return {
+        "total":total,"sim_total":sim_total,
+        "played":pl,"skipped":sk,"hits":hits,"misses":misses,
+        "accuracy":round(acc,2),"play_pct":round(play_pct*100,1),
+        "max_loss":mx,"max_win":mw,
+        "skip_brake":sb,"skip_entropy":se,"skip_top1":st,
+    }, brake, play_pct
 
-    sim_total=total-TRAIN_ROUNDS-1
-    acc=hits/pl*100 if pl else 0
-    play_pct = pl/sim_total if sim_total else 0
-
-    global _entropy_threshold
-    cur_thresh = _entropy_threshold
-    if play_pct < TARGET_PLAY_MIN:
-        new_thresh = min(ENT_THRESH_MAX, cur_thresh + 0.034)
-    elif play_pct > TARGET_PLAY_MAX:
-        new_thresh = max(ENT_THRESH_MIN, cur_thresh - 0.034)
-    else:
-        new_thresh = cur_thresh
-
-    if abs(new_thresh - cur_thresh) > 0.001:
-        print(f"[Adaptive] Entropy threshold: {cur_thresh:.3f} → {new_thresh:.3f}  "
-              f"(play_pct={play_pct*100:.1f}%, target={TARGET_PLAY_MIN*100:.0f}–{TARGET_PLAY_MAX*100:.0f}%)")
-    _entropy_threshold = new_thresh
-
-    with _lock:
-        _sim_stats={
-            "total":total,"sim_total":sim_total,
-            "played":pl,"skipped":sk,"hits":hits,"misses":misses,
-            "accuracy":round(acc,2),
-            "play_pct":round(play_pct*100,1),
-            "max_loss":mx,"max_win":mw,
-            "skip_brake":sb,"skip_entropy":se,"skip_top1":st,
-            "entropy_threshold":round(new_thresh,3),
-        }
-        _brake_left=brake
-
-# ── LIVE PREDICTION ───────────────────────────────────────────────────────────
-def get_prediction():
-    global _pending_pred
-    with _lock:
-        rewards=list(_rewards); raw=list(_raw_rounds); brake=_brake_left
-    if len(rewards)<TRAIN_ROUNDS+5: return None
-
-    stats=build_global_stats(rewards)
-    top2,scores,ent,t1s,t2s=score_round(rewards,*stats)
+# ── BUILD CACHED PRED — called once per new round, result served to all users ─
+def _build_cached_pred(rewards, raw_rounds, brake):
+    """
+    Full prediction dict. Internal keys prefixed '_' are stripped before API response.
+    Returns None if not enough data.
+    """
+    if len(rewards) < TRAIN_ROUNDS + 5:
+        return None
+    stats = build_global_stats(rewards)
+    top2, scores, ent, t1s, t2s = score_round(rewards, *stats)
     eth  = _entropy_threshold
     play = t1s > SKIP_TOP1_THRESHOLD and ent < eth and brake == 0
 
-    skip_reason=None
-    if brake>0:                    skip_reason=f"Loss brake ({brake} rounds left)"
-    elif ent>=eth:                 skip_reason=f"High entropy ({ent:.4f} ≥ {eth:.3f})"
-    elif t1s<=SKIP_TOP1_THRESHOLD: skip_reason=f"Low confidence ({t1s:.4f})"
+    skip_reason = None
+    if brake > 0:                    skip_reason = f"Loss brake ({brake} rounds left)"
+    elif ent >= eth:                 skip_reason = f"High entropy ({ent:.4f} ≥ {eth:.3f})"
+    elif t1s <= SKIP_TOP1_THRESHOLD: skip_reason = f"Low confidence ({t1s:.4f})"
 
-    last_round=raw[-1]["round"] if raw else None
-    next_round=(last_round+1) if last_round else None
+    last_round = raw_rounds[-1]["round"] if raw_rounds else None
+    next_round = (last_round + 1) if last_round else None
 
-    # ── Bonus picks: high-mult classes in top-4 OR >10% probability ──────────
-    bonus_picks = None
-    if play:
-        bonus_picks = get_bonus_picks(scores, top2)
-
-    # Build bonus pick details for response
+    bonus_picks   = get_bonus_picks(scores, top2) if play else None
     bonus_details = None
     if bonus_picks:
-        sc_list = sorted(scores.items(), key=lambda x: -x[1])
-        sc_map  = {int(k): v for k, v in sc_list}
+        sc_map = {int(k): v for k, v in scores.items()}
         bonus_details = [
-            {
-                "idx":   b,
-                "name":  CLASS_NAMES.get(b, "?"),
-                "color": CLASS_COLORS.get(b, "#888"),
-                "conf":  round(sc_map.get(b, 0) * 100, 2),
-            }
+            {"idx": b, "name": CLASS_NAMES.get(b,"?"),
+             "color": CLASS_COLORS.get(b,"#888"),
+             "conf": round(sc_map.get(b,0)*100, 2)}
             for b in bonus_picks
         ]
 
-    if play and next_round is not None:
-        with _lock:
-            cur=_pending_pred
-        if cur is None or cur["round"]!=next_round:
-            with _lock:
-                _pending_pred={
-                    "round":       next_round,
-                    "top2":        list(top2),
-                    "bonus_picks": list(bonus_picks) if bonus_picks else None,
-                }
-
     return {
-        "next_round":next_round,"latest_round":last_round,
-        "pred1":top2[0],"pred2":top2[1],
-        "pred1_name":CLASS_NAMES.get(top2[0],"?"),"pred2_name":CLASS_NAMES.get(top2[1],"?"),
-        "pred1_color":CLASS_COLORS.get(top2[0],"#888"),"pred2_color":CLASS_COLORS.get(top2[1],"#888"),
-        "pred1_conf":round(t1s*100,2),"pred2_conf":round(t2s*100,2),
-        "entropy":round(ent,4),"action":"PLAY" if play else "SKIP",
-        "skip_reason":skip_reason,
-        "bonus_picks": bonus_details,   # None or list of {idx,name,color,conf}
-        "all_scores":{k:round(v*100,2) for k,v in scores.items()},
-        "last_10":rewards[-10:],"total_rounds":len(rewards),
+        # ── public (sent to browser) ──────────────────────────────────────────
+        "next_round":   next_round,  "latest_round": last_round,
+        "pred1":        top2[0],     "pred2":        top2[1],
+        "pred1_name":   CLASS_NAMES.get(top2[0],"?"),
+        "pred2_name":   CLASS_NAMES.get(top2[1],"?"),
+        "pred1_color":  CLASS_COLORS.get(top2[0],"#888"),
+        "pred2_color":  CLASS_COLORS.get(top2[1],"#888"),
+        "pred1_conf":   round(t1s*100,2),
+        "pred2_conf":   round(t2s*100,2),
+        "entropy":      round(ent,4),
+        "action":       "PLAY" if play else "SKIP",
+        "skip_reason":  skip_reason,
+        "bonus_picks":  bonus_details,
+        "all_scores":   {k: round(v*100,2) for k,v in scores.items()},
+        "last_10":      rewards[-10:],
+        "total_rounds": len(rewards),
+        # ── internal (stripped before API response) ───────────────────────────
+        "_play":        play,
+        "_top2":        list(top2),
+        "_bonus_picks": list(bonus_picks) if bonus_picks else None,
+        "_next_round":  next_round,
     }
 
-# ── ROUTES ────────────────────────────────────────────────────────────────────
+# ── FETCHER LOOP — sole owner of all state mutation ──────────────────────────
+def fetcher_loop():
+    global _pending_pred, _cached_pred, _entropy_threshold, _brake_left
+
+    while True:
+        try:
+            if _should_reset():
+                _do_reset()
+                time.sleep(POLL_INTERVAL)
+                continue
+
+            with _lock:
+                _fetch_status["last_attempt"] = time.strftime("%H:%M:%S")
+                _fetch_status["status"]       = "fetching"
+
+            count, records = fetch_new()
+
+            with _lock:
+                if count > 0:
+                    _fetch_status["last_success"]  = time.strftime("%H:%M:%S")
+                    _fetch_status["total_fetched"] += count
+                    _fetch_status["last_error"]    = None
+                    _fetch_status["status"]        = "ok"
+                else:
+                    if _fetch_status.get("status") != "error":
+                        _fetch_status["status"] = "ok_no_new"
+
+            if count > 0:
+                rewards = [r["reward_index"] for r in records]
+                with _lock:
+                    _raw_rounds.clear(); _raw_rounds.extend(records)
+                    _rewards.clear();    _rewards.extend(rewards)
+                    pending = _pending_pred
+
+                # ── 1. Resolve pending hit/miss ───────────────────────────────
+                if pending is not None:
+                    pred_round = pending["round"]
+                    actual_rec = next((r for r in records if r["round"] == pred_round), None)
+                    if actual_rec is not None:
+                        actual_val = actual_rec["reward_index"]
+                        all_preds  = list(pending["top2"])
+                        if pending.get("bonus_picks"):
+                            all_preds += [p for p in pending["bonus_picks"] if p not in all_preds]
+                        hit   = actual_val in all_preds
+                        entry = {
+                            "round": pred_round, "top2": pending["top2"],
+                            "bonus_picks": pending.get("bonus_picks"),
+                            "actual": actual_val, "hit": hit, "action": "PLAY",
+                        }
+                        with _lock:
+                            _live_log.append(entry)
+                            _pending_pred = None
+                        pending = None
+                        print(f"[Live] #{pred_round}: pred={entry['top2']} "
+                              f"bonus={entry['bonus_picks']} "
+                              f"actual={actual_val} → {'HIT ✓' if hit else 'MISS ✗'}")
+                    elif records and pred_round <= records[-1]["round"]:
+                        with _lock:
+                            _pending_pred = None
+                        pending = None
+                        print(f"[Fetcher] Stale pending cleared (#{pred_round})")
+
+                # ── 2. Sim + adaptive threshold ───────────────────────────────
+                sim_dict, brake, play_pct = _run_sim(rewards)
+
+                cur = _entropy_threshold
+                if play_pct < TARGET_PLAY_MIN:   new_eth = min(ENT_THRESH_MAX, cur + 0.034)
+                elif play_pct > TARGET_PLAY_MAX: new_eth = max(ENT_THRESH_MIN, cur - 0.034)
+                else:                            new_eth = cur
+                if abs(new_eth - cur) > 0.001:
+                    print(f"[Adaptive] Entropy: {cur:.3f}→{new_eth:.3f} (play%={play_pct*100:.1f}%)")
+                _entropy_threshold = new_eth
+                sim_dict["entropy_threshold"] = round(new_eth, 3)
+
+                with _lock:
+                    _sim_stats.clear(); _sim_stats.update(sim_dict)
+                    _brake_left = brake
+
+                # ── 3. Build cached pred — ONE calculation, all users read it ─
+                cached = _build_cached_pred(rewards, records, brake)
+                with _lock:
+                    _cached_pred = cached
+
+                # ── 4. Update pending (no browser needed) ─────────────────────
+                if cached and cached["_play"] and cached["_next_round"] is not None:
+                    nr = cached["_next_round"]
+                    with _lock:
+                        cur_p = _pending_pred
+                    if cur_p is None or cur_p["round"] != nr:
+                        np_ = {"round": nr, "top2": cached["_top2"],
+                               "bonus_picks": cached["_bonus_picks"]}
+                        with _lock:
+                            _pending_pred = np_
+                        print(f"[Fetcher] Pending → #{nr} top2={cached['_top2']} "
+                              f"bonus={cached['_bonus_picks']}")
+
+                with _lock:
+                    lr = _raw_rounds[-1]["round"] if _raw_rounds else "?"
+                print(f"[Fetcher] +{count} rounds. Latest: #{lr}. Total: {len(records)}")
+
+        except Exception as e:
+            print(f"[Fetcher] Unexpected: {e}")
+            import traceback; traceback.print_exc()
+            with _lock:
+                _fetch_status["last_error"] = str(e)
+                _fetch_status["status"]     = "error"
+        time.sleep(POLL_INTERVAL)
+
+# ── API ROUTES — read-only, zero computation, all users share one cache ───────
 @app.route("/")
 def index():
-    return render_template("index.html",class_names=CLASS_NAMES,class_colors=CLASS_COLORS)
+    return render_template("index.html", class_names=CLASS_NAMES, class_colors=CLASS_COLORS)
 
 @app.route("/api/predict")
 def api_predict():
-    pred=get_prediction()
-    if pred is None: return jsonify({"error":"Not enough data yet"}),503
-    return jsonify(pred)
+    with _lock:
+        cached = _cached_pred
+    if cached is None:
+        return jsonify({"error": "Not enough data yet"}), 503
+    # Strip internal "_" keys — never expose to browser
+    pub = {k: v for k, v in cached.items() if not k.startswith("_")}
+    return jsonify(pub)
 
 @app.route("/api/stats")
 def api_stats():
     with _lock:
-        stats=dict(_sim_stats); live=list(_live_log)
-    cur=0; mx_live=0
+        stats = dict(_sim_stats)
+        live  = list(_live_log)
+    cur = 0; mx_live = 0
     for e in reversed(live):
-        if not e["hit"]: cur+=1; mx_live=max(mx_live,cur)
+        if not e["hit"]: cur += 1; mx_live = max(mx_live, cur)
         else: break
-    stats["live_log"]=live
-    stats["live_cur_streak"]=cur
-    stats["live_max_loss"]=mx_live
+    stats["live_log"]        = live
+    stats["live_cur_streak"] = cur
+    stats["live_max_loss"]   = mx_live
     return jsonify(stats)
 
 @app.route("/api/status")
 def api_status():
     with _lock:
-        fs=dict(_fetch_status); total=len(_rewards)
-        latest=_raw_rounds[-1]["round"] if _raw_rounds else None
-    now_ist=datetime.now(IST)
-    fs["total_rounds"]=total; fs["latest_round"]=latest
-    fs["server_time_ist"]=now_ist.strftime("%H:%M:%S IST")
-    fs["entropy_threshold"]=round(_entropy_threshold,3)
-    reset_today=now_ist.replace(hour=RESET_HOUR_IST,minute=RESET_MINUTE_IST,second=0,microsecond=0)
+        fs     = dict(_fetch_status)
+        total  = len(_rewards)
+        latest = _raw_rounds[-1]["round"] if _raw_rounds else None
+    now_ist = datetime.now(IST)
+    fs["total_rounds"]      = total
+    fs["latest_round"]      = latest
+    fs["server_time_ist"]   = now_ist.strftime("%H:%M:%S IST")
+    fs["entropy_threshold"] = round(_entropy_threshold, 3)
+    reset_today = now_ist.replace(hour=RESET_HOUR_IST, minute=RESET_MINUTE_IST,
+                                  second=0, microsecond=0)
     from datetime import timedelta
-    if now_ist>=reset_today:
-        reset_today+=timedelta(days=1)
-    secs=(reset_today-now_ist).seconds
-    fs["next_reset_in"]=f"{secs//3600:02d}:{(secs%3600)//60:02d}:{secs%60:02d}"
+    if now_ist >= reset_today:
+        reset_today += timedelta(days=1)
+    secs = (reset_today - now_ist).seconds
+    fs["next_reset_in"] = f"{secs//3600:02d}:{(secs%3600)//60:02d}:{secs%60:02d}"
     return jsonify(fs)
 
 @app.route("/api/history")
 def api_history():
-    with _lock: raw=list(_raw_rounds[-50:])
+    with _lock:
+        raw = list(_raw_rounds[-50:])
     return jsonify([{
-        "round":r["round"],"reward_index":r["reward_index"],
-        "name":CLASS_NAMES.get(r["reward_index"],"?"),
-        "color":CLASS_COLORS.get(r["reward_index"],"#888")
+        "round": r["round"], "reward_index": r["reward_index"],
+        "name":  CLASS_NAMES.get(r["reward_index"],"?"),
+        "color": CLASS_COLORS.get(r["reward_index"],"#888"),
     } for r in reversed(raw)])
 
 # ── STARTUP ───────────────────────────────────────────────────────────────────
 def startup():
-    global _last_reset_date
-    now_ist=datetime.now(IST)
-    past_530=(now_ist.hour>RESET_HOUR_IST or
-              (now_ist.hour==RESET_HOUR_IST and now_ist.minute>=RESET_MINUTE_IST))
+    global _last_reset_date, _pending_pred, _cached_pred, _entropy_threshold, _brake_left
+
+    now_ist  = datetime.now(IST)
+    past_530 = (now_ist.hour > RESET_HOUR_IST or
+                (now_ist.hour == RESET_HOUR_IST and now_ist.minute >= RESET_MINUTE_IST))
     if past_530:
-        _last_reset_date=now_ist.date()
+        _last_reset_date = now_ist.date()
 
-    records=_load_file()
+    records = _load_file()
     if records:
-        rewards=[r["reward_index"] for r in records]
+        rewards = [r["reward_index"] for r in records]
         with _lock:
-            _raw_rounds.extend(records); _rewards.extend(rewards)
+            _raw_rounds.extend(records)
+            _rewards.extend(rewards)
         print(f"[Startup] Loaded {len(records)} rounds. Building sim...")
-        _rebuild_sim()
-        with _lock: s=dict(_sim_stats)
-        print(f"[Startup] Done — played={s.get('played')}, acc={s.get('accuracy')}%, maxloss={s.get('max_loss')}")
-    else:
-        print("[Startup] No data file found. Waiting for API fetch...")
 
-    threading.Thread(target=fetcher_loop,daemon=True).start()
-    print(f"[Startup] Fetcher started. IST now: {now_ist.strftime('%H:%M:%S')}. Next reset at 05:30 IST.")
+        sim_dict, brake, play_pct = _run_sim(rewards)
+        cur = _entropy_threshold
+        if play_pct < TARGET_PLAY_MIN:   new_eth = min(ENT_THRESH_MAX, cur + 0.034)
+        elif play_pct > TARGET_PLAY_MAX: new_eth = max(ENT_THRESH_MIN, cur - 0.034)
+        else:                            new_eth = cur
+        _entropy_threshold = new_eth
+        sim_dict["entropy_threshold"] = round(new_eth, 3)
+
+        with _lock:
+            _sim_stats.update(sim_dict)
+            _brake_left = brake
+
+        # Build initial cache so first user gets instant response
+        cached = _build_cached_pred(rewards, records, brake)
+        with _lock:
+            _cached_pred = cached
+
+        if cached and cached["_play"] and cached["_next_round"] is not None:
+            _pending_pred = {
+                "round":       cached["_next_round"],
+                "top2":        cached["_top2"],
+                "bonus_picks": cached["_bonus_picks"],
+            }
+            print(f"[Startup] Pending → #{_pending_pred['round']} top2={_pending_pred['top2']}")
+
+        action = cached.get("action","N/A") if cached else "N/A"
+        print(f"[Startup] Done — acc={sim_dict.get('accuracy')}% brake={brake} action={action}")
+    else:
+        print("[Startup] No data file. Waiting for API fetch...")
+
+    threading.Thread(target=fetcher_loop, daemon=True).start()
+    print(f"[Startup] Fetcher started. IST: {now_ist.strftime('%H:%M:%S')}. Reset at 05:30 IST.")
 
 startup()
 
-if __name__=="__main__":
-    app.run(host="0.0.0.0",port=5000,debug=False)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=False)
