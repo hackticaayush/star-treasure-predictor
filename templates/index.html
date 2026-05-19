@@ -6,7 +6,7 @@
 <title>Treasure AI</title>
 
 <!-- PWA -->
-<link rel="manifest" href="/manifest.json">
+<link rel="manifest" href="/pwa/manifest.json">
 <meta name="theme-color" content="#07052a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1170,7 +1170,7 @@ function launchApp() {
    SERVICE WORKER REGISTRATION
 ════════════════════════════════════════════════════ */
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(console.warn);
+  navigator.serviceWorker.register('/pwa/sw.js', { scope: '/' }).catch(console.warn);
 }
 
 /* ════════════════════════════════════════════════════
