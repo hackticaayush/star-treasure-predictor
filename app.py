@@ -112,6 +112,13 @@ BONUS_CONF_THRESH_MAX     = 0.18
 BONUS_CONF_THRESH_STEP    = 0.005
 BONUS_EVAL_WINDOW         = 40
 
+# ── CLASS HIT RATE CONFIG (NEW) ───────────────────────────────────────────────
+# Tracks per-class prediction accuracy across BOTH play AND skip rounds.
+# This removes survivor bias where only played-round hits were counted.
+CLASS_HIT_BUF_MAX     = 60    # rolling window: last 60 predicted rounds per class
+CLASS_HIT_MIN_SAMPLES = 8     # minimum samples before boost is applied
+CLASS_HIT_BOOST_SCALE = 0.30  # max ±30% score adjustment (hit_rate=1.0 → +30%, 0.0 → -30%)
+
 # ── GLOBAL STATE ──────────────────────────────────────────────────────────────
 _lock              = threading.Lock()
 _rewards           = []
@@ -120,6 +127,7 @@ _sim_stats         = {}
 _brake_left        = 0
 _live_log          = []
 _pending_pred      = None
+_skip_pending_pred = None          # NEW: tracks skip-round predictions
 _entropy_threshold = SKIP_ENTROPY_THRESHOLD
 _top1_threshold    = SKIP_TOP1_THRESHOLD
 _last_reset_date   = None
@@ -169,6 +177,11 @@ _dynamic_markov_w = {
 _dynamic_bonus_thresh  = BONUS_CONF_THRESH_DEFAULT
 _bonus_eval_log        = []
 
+# ── CLASS HIT RATE STATE (NEW) ────────────────────────────────────────────────
+# Key: class index (1-8), Value: list of 1/0 (hit/miss) for each round
+# where that class was predicted (regardless of play/skip decision).
+_class_hit_buf = {i: [] for i in range(1, 9)}
+
 
 # ── DAILY RESET ───────────────────────────────────────────────────────────────
 def _should_reset():
@@ -180,7 +193,7 @@ def _should_reset():
     return past_530 and _last_reset_date != today
 
 def _do_reset():
-    global _last_reset_date, _pending_pred, _cached_pred
+    global _last_reset_date, _pending_pred, _cached_pred, _skip_pending_pred
     global _dynamic_brake_trigger, _dynamic_brake_pause
     global _dynamic_train_rounds, _top1_threshold
     global _dynamic_lookback, _dynamic_decay, _dynamic_boost_max, _dynamic_boost_min
@@ -192,8 +205,9 @@ def _do_reset():
     with _lock:
         _rewards.clear(); _raw_rounds.clear()
         _sim_stats.clear(); _live_log.clear()
-        _pending_pred = None
-        _cached_pred  = None
+        _pending_pred      = None
+        _skip_pending_pred = None          # NEW
+        _cached_pred       = None
         _fetch_status["last_reset"] = now_ist.strftime("%d %b %Y %H:%M IST")
         _fetch_status["status"]     = "reset_done"
         for g in PATTERN_GROUPS:
@@ -205,6 +219,7 @@ def _do_reset():
         _brake_loss_confs.clear()
         _bonus_eval_log.clear()
         for o in _markov_hit_buf: _markov_hit_buf[o].clear()
+        for i in range(1, 9): _class_hit_buf[i].clear()   # NEW
     _dynamic_brake_trigger = BRAKE_TRIGGER_DEFAULT
     _dynamic_brake_pause   = BRAKE_PAUSE_DEFAULT
     _dynamic_train_rounds  = TRAIN_ROUNDS_DEFAULT
@@ -403,6 +418,32 @@ def recalibrate_bonus_thresh(bonus_eval_log):
               f"n={len(bonus_rounds)})")
         _dynamic_bonus_thresh = new_thresh
 
+# ── CLASS HIT RATE RECORDER (NEW) ────────────────────────────────────────────
+def _record_class_hits(all_preds, actual_val, source="play"):
+    """
+    Record hit/miss for each predicted class in _class_hit_buf.
+
+    Called for BOTH play and skip rounds — this eliminates the survivor
+    bias where only played-round outcomes were counted. A class that is
+    consistently predicted but rarely correct will accumulate misses even
+    in skip rounds, correctly suppressing its future score.
+
+    Parameters
+    ----------
+    all_preds  : list of class indices that were predicted (top2 + bonus)
+    actual_val : the class that actually appeared in that round
+    source     : "play" or "skip" — for logging only, no logic difference
+    """
+    with _lock:
+        for cls in all_preds:
+            hit_for_cls = 1 if actual_val == cls else 0
+            _class_hit_buf[cls].append(hit_for_cls)
+            if len(_class_hit_buf[cls]) > CLASS_HIT_BUF_MAX * 3:
+                _class_hit_buf[cls].pop(0)
+    overall_hit = actual_val in all_preds
+    print(f"[ClassHit] ({source}) preds={all_preds} actual={actual_val} "
+          f"{'HIT ✓' if overall_hit else 'MISS ✗'}")
+
 # ── PATTERN DETECTOR ─────────────────────────────────────────────────────────
 def compute_pattern_scores(rewards):
     with _lock:
@@ -581,6 +622,28 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar):
         _last_pattern_info.clear()
         _last_pattern_info.update(pattern_info)
         _last_pattern_info["raw_scores"] = {g: round(v, 4) for g, v in pattern_scores.items()}
+
+    # ── CLASS HIT RATE ADJUSTMENT (NEW) ──────────────────────────────────────
+    # Apply per-class accuracy boost/penalty based on rolling hit rate.
+    # Uses _class_hit_buf which is updated for BOTH play AND skip rounds,
+    # eliminating survivor bias from only tracking played outcomes.
+    with _lock:
+        chb_snap = {cls: list(buf) for cls, buf in _class_hit_buf.items()}
+
+    for cls in list(sc.keys()):
+        buf = chb_snap.get(cls, [])
+        if len(buf) >= CLASS_HIT_MIN_SAMPLES:
+            window   = buf[-CLASS_HIT_BUF_MAX:]
+            hit_rate = sum(window) / len(window)
+            # Neutral at 0.5: above → boost, below → penalty. Max ±CLASS_HIT_BOOST_SCALE.
+            adjustment = (hit_rate - 0.5) * CLASS_HIT_BOOST_SCALE * 2
+            sc[cls] = max(0.0, sc[cls] * (1.0 + adjustment))
+
+    # Re-normalize after class hit adjustment
+    ts = sum(sc.values()) or 1
+    sc = {k: v / ts for k, v in sc.items()}
+    # ─────────────────────────────────────────────────────────────────────────
+
     rk=sorted(sc.items(),key=lambda x:-x[1])
     ent=-sum(v*math.log2(v) for v in sc.values() if v>0)
     t3s = rk[2][1] if len(rk) >= 3 else 0.0
@@ -620,7 +683,6 @@ def get_bonus_picks(scores, top2):
     if not qualifying:
         return None
 
-    # NEW — sort qualifying classes by EV score (prob * multiplier) descending
     ev_ranked = sorted(
         qualifying,
         key=lambda cls: sc_map.get(cls, 0.0) * HIGH_MULT_EV.get(cls, 1),
@@ -738,7 +800,6 @@ def _build_cached_pred(rewards, raw_rounds, brake):
         pred3      = t3c
         pred3_conf = round(t3s * 100, 2)
 
-    # ── BONUS PICKS: computed for BOTH play and skip ──────────────────────────
     bonus_picks = get_bonus_picks(scores, top2)
 
     bonus_details = None
@@ -773,6 +834,17 @@ def _build_cached_pred(rewards, raw_rounds, brake):
                 "triggered":     info.get("triggered", False),
                 "boost_applied": info.get("boost_applied", 0.0),
             }
+
+    # Include class hit rate snapshot for API visibility
+    with _lock:
+        chb_snap = {}
+        for cls, buf in _class_hit_buf.items():
+            w = buf[-CLASS_HIT_BUF_MAX:]
+            chb_snap[cls] = {
+                "samples": len(w),
+                "hit_rate": round(sum(w)/len(w), 4) if w else None,
+            }
+
     return {
         "next_round":         next_round,   "latest_round":  last_round,
         "pred1":              top2[0],      "pred2":         top2[1],
@@ -806,6 +878,7 @@ def _build_cached_pred(rewards, raw_rounds, brake):
         "pattern_boost_max":  round(boost_max, 4),
         "bonus_conf_thresh":  round(bonus_thresh, 4),
         "markov_weights":     {k: round(v, 4) for k, v in dw.items()},
+        "class_hit_rates":    chb_snap,   # NEW — visible in /api/predict
         "_play":              play,
         "_top2":              list(top2),
         "_top3":              ([top2[0], top2[1], pred3] if pred3 else list(top2)),
@@ -825,6 +898,7 @@ def fetcher_loop():
     global _dynamic_train_rounds
     global _dynamic_boost_max, _dynamic_boost_min
     global _dynamic_bonus_thresh
+    global _skip_pending_pred   # NEW
 
     while True:
         try:
@@ -850,7 +924,10 @@ def fetcher_loop():
                 with _lock:
                     _raw_rounds.clear(); _raw_rounds.extend(records)
                     _rewards.clear();    _rewards.extend(rewards)
-                    pending = _pending_pred
+                    pending      = _pending_pred
+                    skip_pending = _skip_pending_pred   # NEW
+
+                # ── Resolve PLAY pending prediction ──────────────────────────
                 if pending is not None:
                     pred_round = pending["round"]
                     actual_rec = next((r for r in records if r["round"] == pred_round), None)
@@ -860,6 +937,10 @@ def fetcher_loop():
                         if pending.get("bonus_picks"):
                             all_preds += [p for p in pending["bonus_picks"] if p not in all_preds]
                         hit = actual_val in all_preds
+
+                        # Record class hits for PLAY round (NEW call)
+                        _record_class_hits(all_preds, actual_val, source="play")
+
                         if hit and pending.get("pattern_scores"):
                             for group_name, pscore in pending["pattern_scores"].items():
                                 update_pattern_hit(group_name, pscore)
@@ -917,6 +998,34 @@ def fetcher_loop():
                             _pending_pred = None
                         pending = None
                         print(f"[Fetcher] Stale pending cleared (#{pred_round})")
+
+                # ── Resolve SKIP pending prediction (NEW) ────────────────────
+                # We evaluate the skip-round prediction outcome purely to update
+                # _class_hit_buf. Brake/loss buffers are NOT touched here since
+                # we deliberately chose to skip — brake logic must only reflect
+                # rounds we actually played.
+                if skip_pending is not None:
+                    skip_round = skip_pending["round"]
+                    skip_rec   = next((r for r in records if r["round"] == skip_round), None)
+                    if skip_rec is not None:
+                        actual_val  = skip_rec["reward_index"]
+                        skip_preds  = list(skip_pending.get("top3", skip_pending["top2"]))
+                        if skip_pending.get("bonus_picks"):
+                            skip_preds += [p for p in skip_pending["bonus_picks"]
+                                           if p not in skip_preds]
+                        # Record class hits for SKIP round
+                        _record_class_hits(skip_preds, actual_val, source="skip")
+                        with _lock:
+                            _skip_pending_pred = None
+                        skip_pending = None
+                        print(f"[SkipEval] #{skip_round}: pred={skip_pending['top2'] if skip_pending else '?'} "
+                              f"actual={actual_val}")
+                    elif records and skip_round <= records[-1]["round"]:
+                        with _lock:
+                            _skip_pending_pred = None
+                        skip_pending = None
+                        print(f"[Fetcher] Stale skip_pending cleared (#{skip_round})")
+
                 sim_dict, brake, play_pct, sim_play_res, sim_loss_confs, sim_extras = \
                     _run_sim(rewards)
                 total_rounds = len(rewards)
@@ -975,32 +1084,50 @@ def fetcher_loop():
                 cached = _build_cached_pred(rewards, records, brake)
                 with _lock:
                     _cached_pred = cached
-                if cached and cached["_play"] and cached["_next_round"] is not None:
+                if cached and cached["_next_round"] is not None:
                     nr = cached["_next_round"]
-                    with _lock:
-                        cur_p = _pending_pred
-                    if cur_p is None or cur_p["round"] != nr:
-                        stats_now = build_global_stats(rewards)
-                        _, _, _, _, _, _, _, mp = score_round(rewards, *stats_now)
-                        np_ = {
-                            "round":           nr,
-                            "top2":            cached["_top2"],
-                            "top3":            cached["_top3"],
-                            "bonus_picks":     cached["_bonus_picks"],
-                            "bonus_triggered": cached.get("_bonus_triggered", False),
-                            "pattern_scores":  cached.get("_pattern_scores", {}),
-                            "any_boosted":     cached.get("_any_boosted", False),
-                            "t1s":             cached.get("_t1s", 0.25),
-                            "markov_preds":    mp,
-                        }
+                    if cached["_play"]:
+                        # PLAY round — set _pending_pred as before
                         with _lock:
-                            _pending_pred = np_
-                        print(f"[Fetcher] Pending → #{nr} top2={cached['_top2']} "
-                              f"trigger={cached['brake_trigger']} "
-                              f"pause={cached['brake_pause']} "
-                              f"top1_t={cached['top1_threshold']} "
-                              f"lookback={cached['pattern_lookback']} "
-                              f"decay={cached['pattern_decay']}")
+                            cur_p = _pending_pred
+                        if cur_p is None or cur_p["round"] != nr:
+                            stats_now = build_global_stats(rewards)
+                            _, _, _, _, _, _, _, mp = score_round(rewards, *stats_now)
+                            np_ = {
+                                "round":           nr,
+                                "top2":            cached["_top2"],
+                                "top3":            cached["_top3"],
+                                "bonus_picks":     cached["_bonus_picks"],
+                                "bonus_triggered": cached.get("_bonus_triggered", False),
+                                "pattern_scores":  cached.get("_pattern_scores", {}),
+                                "any_boosted":     cached.get("_any_boosted", False),
+                                "t1s":             cached.get("_t1s", 0.25),
+                                "markov_preds":    mp,
+                            }
+                            with _lock:
+                                _pending_pred = np_
+                            print(f"[Fetcher] Pending → #{nr} top2={cached['_top2']} "
+                                  f"trigger={cached['brake_trigger']} "
+                                  f"pause={cached['brake_pause']} "
+                                  f"top1_t={cached['top1_threshold']} "
+                                  f"lookback={cached['pattern_lookback']} "
+                                  f"decay={cached['pattern_decay']}")
+                    else:
+                        # SKIP round (NEW) — set _skip_pending_pred so we can
+                        # evaluate the prediction outcome without affecting brake logic
+                        with _lock:
+                            cur_sp = _skip_pending_pred
+                        if cur_sp is None or cur_sp["round"] != nr:
+                            sp_ = {
+                                "round":       nr,
+                                "top2":        cached["_top2"],
+                                "top3":        cached["_top3"],
+                                "bonus_picks": cached["_bonus_picks"],
+                            }
+                            with _lock:
+                                _skip_pending_pred = sp_
+                            print(f"[Fetcher] SkipPending → #{nr} top2={cached['_top2']}")
+
                 with _lock:
                     lr = _raw_rounds[-1]["round"] if _raw_rounds else "?"
                 print(f"[Fetcher] +{count} rounds. Latest: #{lr}. Total: {len(records)}")
@@ -1064,6 +1191,15 @@ def api_stats():
         dyn_bmax  = _dynamic_boost_max
         dyn_lk    = _dynamic_lookback
         dyn_dc    = _dynamic_decay
+        # NEW — class hit rate summary
+        chb_summary = {}
+        for cls, buf in _class_hit_buf.items():
+            w = buf[-CLASS_HIT_BUF_MAX:]
+            chb_summary[cls] = {
+                "samples":  len(w),
+                "hit_rate": round(sum(w)/len(w), 4) if w else None,
+                "name":     CLASS_NAMES.get(cls, "?"),
+            }
     cur = 0; mx_live = 0
     for e in reversed(live):
         if not e["hit"]: cur += 1; mx_live = max(mx_live, cur)
@@ -1090,6 +1226,7 @@ def api_stats():
     stats["pattern_boost_max"]   = round(dyn_bmax, 4)
     stats["pattern_lookback"]    = dyn_lk
     stats["pattern_decay"]       = round(dyn_dc, 4)
+    stats["class_hit_rates"]     = chb_summary   # NEW
     return jsonify(stats)
 
 @app.route("/api/status")
@@ -1215,12 +1352,18 @@ def api_adaptive():
             "ev_thresholds":       {str(cls): {"multiplier": mult,
                                                "min_prob": round(HIGH_MULT_EV_TARGET/mult, 4)}
                                     for cls, mult in HIGH_MULT_EV.items()},
+            "class_hit_buf_max":   CLASS_HIT_BUF_MAX,
+            "class_hit_min_samples": CLASS_HIT_MIN_SAMPLES,
+            "class_hit_boost_scale": CLASS_HIT_BOOST_SCALE,
         })
 
 # ── STARTUP ───────────────────────────────────────────────────────────────────
 def startup():
     global _last_reset_date, _pending_pred, _cached_pred, _entropy_threshold, _brake_left
     global _dynamic_brake_trigger, _dynamic_brake_pause, _dynamic_train_rounds
+    global _skip_pending_pred   # NEW
+
+    _skip_pending_pred = None   # NEW
 
     now_ist  = datetime.now(IST)
     past_530 = (now_ist.hour > RESET_HOUR_IST or
@@ -1292,6 +1435,16 @@ def startup():
             }
             print(f"[Startup] Pending → #{_pending_pred['round']} "
                   f"top2={_pending_pred['top2']}")
+        elif cached and not cached["_play"] and cached["_next_round"] is not None:
+            # NEW — also register skip pending on startup
+            _skip_pending_pred = {
+                "round":       cached["_next_round"],
+                "top2":        cached["_top2"],
+                "top3":        cached["_top3"],
+                "bonus_picks": cached["_bonus_picks"],
+            }
+            print(f"[Startup] SkipPending → #{_skip_pending_pred['round']} "
+                  f"top2={_skip_pending_pred['top2']}")
         action = cached.get("action","N/A") if cached else "N/A"
         print(f"[Startup] Done — acc={sim_dict.get('accuracy')}% "
               f"brake={brake} action={action} "
