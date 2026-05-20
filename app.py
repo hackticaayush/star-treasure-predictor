@@ -298,7 +298,7 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar):
     n=len(h)
     if n<4:
         ranked=sorted(prob.items(),key=lambda x:-x[1])
-        return [ranked[0][0],ranked[1][0]],{k:1/8 for k in range(1,9)},3.0,0.125,0.125
+        return [ranked[0][0],ranked[1][0]],{k:1/8 for k in range(1,9)},3.0,0.125,0.125,0.125,ranked[2][0] if len(ranked)>=3 else None
 
     l1,l2,l3,l4=h[-1],h[-2],h[-3],h[-4]
     k1=(l1,);k2=(l2,l1);k3=(l3,l2,l1);k4=(l4,l3,l2,l1)
@@ -357,7 +357,10 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar):
 
     rk=sorted(sc.items(),key=lambda x:-x[1])
     ent=-sum(v*math.log2(v) for v in sc.values() if v>0)
-    return [rk[0][0],rk[1][0]],sc,ent,rk[0][1],rk[1][1]
+    # return top3 scores too so caller can decide on 3rd pick
+    t3s = rk[2][1] if len(rk) >= 3 else 0.0
+    t3c = rk[2][0] if len(rk) >= 3 else None
+    return [rk[0][0],rk[1][0]],sc,ent,rk[0][1],rk[1][1],t3s,t3c
 
 def should_play(t1, ent, brake_active=False):
     if brake_active: return False
@@ -388,7 +391,7 @@ def _run_sim(rewards):
     hits=misses=sk=pl=0; ls=mx=ws=mw=0; brake=0; se=st=sb=0
     for i in range(TRAIN_ROUNDS, total - 1):
         h=rewards[:i+1]; tn=rewards[i+1]
-        top2,_,ent,t1s,_=score_round(h,*stats)
+        top2,_,ent,t1s,_,_,_=score_round(h,*stats)
         ba=brake>0
         if brake>0: brake-=1
         play=should_play(t1s,ent,ba)
@@ -418,7 +421,7 @@ def _build_cached_pred(rewards, raw_rounds, brake):
     if len(rewards) < TRAIN_ROUNDS + 5:
         return None
     stats = build_global_stats(rewards)
-    top2, scores, ent, t1s, t2s = score_round(rewards, *stats)
+    top2, scores, ent, t1s, t2s, t3s, t3c = score_round(rewards, *stats)
     eth  = _entropy_threshold
     play = t1s > SKIP_TOP1_THRESHOLD and ent < eth and brake == 0
 
@@ -429,6 +432,19 @@ def _build_cached_pred(rewards, raw_rounds, brake):
 
     last_round = raw_rounds[-1]["round"] if raw_rounds else None
     next_round = (last_round + 1) if last_round else None
+
+    # ── 3rd PICK LOGIC ────────────────────────────────────────────────────────
+    # If top2 are both small-mult classes AND top3 conf is within 1% of top2,
+    # include a 3rd suggestion.
+    SMALL_MULT = {1, 5, 6, 8}
+    pred3       = None
+    pred3_conf  = None
+    top2_are_small = all(c in SMALL_MULT for c in top2)
+    if (play and top2_are_small and t3c is not None
+            and (t2s - t3s) <= 0.01):   # within 1 percentage point
+        pred3      = t3c
+        pred3_conf = round(t3s * 100, 2)
+    # ─────────────────────────────────────────────────────────────────────────
 
     bonus_picks   = get_bonus_picks(scores, top2) if play else None
     bonus_details = None
@@ -461,12 +477,16 @@ def _build_cached_pred(rewards, raw_rounds, brake):
     return {
         "next_round":        next_round,  "latest_round": last_round,
         "pred1":             top2[0],     "pred2":        top2[1],
+        "pred3":             pred3,
         "pred1_name":        CLASS_NAMES.get(top2[0],"?"),
         "pred2_name":        CLASS_NAMES.get(top2[1],"?"),
+        "pred3_name":        CLASS_NAMES.get(pred3,"?") if pred3 else None,
         "pred1_color":       CLASS_COLORS.get(top2[0],"#888"),
         "pred2_color":       CLASS_COLORS.get(top2[1],"#888"),
+        "pred3_color":       CLASS_COLORS.get(pred3,"#888") if pred3 else None,
         "pred1_conf":        round(t1s*100,2),
         "pred2_conf":        round(t2s*100,2),
+        "pred3_conf":        pred3_conf,
         "entropy":           round(ent,4),
         "action":            "PLAY" if play else "SKIP",
         "skip_reason":       skip_reason,
@@ -478,6 +498,7 @@ def _build_cached_pred(rewards, raw_rounds, brake):
         "dynamic_thresholds": {g: round(v, 4) for g, v in dyn_thresh_snap.items()},
         "_play":             play,
         "_top2":             list(top2),
+        "_top3":             ([top2[0], top2[1], pred3] if pred3 else list(top2)),
         "_bonus_picks":      list(bonus_picks) if bonus_picks else None,
         "_next_round":       next_round,
         "_pattern_scores":   {g: pattern_snap.get(g, {}).get("score", 0.0)
@@ -523,7 +544,8 @@ def fetcher_loop():
                     actual_rec = next((r for r in records if r["round"] == pred_round), None)
                     if actual_rec is not None:
                         actual_val    = actual_rec["reward_index"]
-                        all_preds     = list(pending["top2"])
+                        # use top3 if available, else top2
+                        all_preds     = list(pending.get("top3", pending["top2"]))
                         if pending.get("bonus_picks"):
                             all_preds += [p for p in pending["bonus_picks"] if p not in all_preds]
                         hit = actual_val in all_preds
@@ -536,6 +558,7 @@ def fetcher_loop():
 
                         entry = {
                             "round": pred_round, "top2": pending["top2"],
+                            "top3": pending.get("top3"),
                             "bonus_picks": pending.get("bonus_picks"),
                             "actual": actual_val, "hit": hit, "action": "PLAY",
                         }
@@ -544,6 +567,7 @@ def fetcher_loop():
                             _pending_pred = None
                         pending = None
                         print(f"[Live] #{pred_round}: pred={entry['top2']} "
+                              f"pred3={entry.get('top3')} "
                               f"bonus={entry['bonus_picks']} "
                               f"actual={actual_val} → {'HIT ✓' if hit else 'MISS ✗'}")
                     elif records and pred_round <= records[-1]["round"]:
@@ -579,6 +603,7 @@ def fetcher_loop():
                         np_ = {
                             "round":          nr,
                             "top2":           cached["_top2"],
+                            "top3":           cached["_top3"],
                             "bonus_picks":    cached["_bonus_picks"],
                             "pattern_scores": cached.get("_pattern_scores", {}),
                         }
@@ -752,10 +777,11 @@ def startup():
             _pending_pred = {
                 "round":          cached["_next_round"],
                 "top2":           cached["_top2"],
+                "top3":           cached["_top3"],
                 "bonus_picks":    cached["_bonus_picks"],
                 "pattern_scores": cached.get("_pattern_scores", {}),
             }
-            print(f"[Startup] Pending → #{_pending_pred['round']} top2={_pending_pred['top2']}")
+            print(f"[Startup] Pending → #{_pending_pred['round']} top2={_pending_pred['top2']} top3={_pending_pred['top3']}")
 
         action = cached.get("action","N/A") if cached else "N/A"
         print(f"[Startup] Done — acc={sim_dict.get('accuracy')}% brake={brake} action={action}")
