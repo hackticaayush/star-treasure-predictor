@@ -607,16 +607,14 @@ def get_bonus_picks(scores, top2):
         thresh = _dynamic_bonus_thresh
 
     sc_map  = {int(k): float(v) for k, v in scores.items()}
-    ranked  = sorted(sc_map.items(), key=lambda x: -x[1])
 
     qualifying = set()
     for cls in HIGH_MULT_CLASSES:
         prob = sc_map.get(cls, 0.0)
         mult = HIGH_MULT_EV.get(cls, 1)
         ev_pass   = (prob * mult) >= HIGH_MULT_EV_TARGET
-        rank_pass = cls in {c for c, _ in ranked[:4]}
         conf_pass = prob > thresh
-        if ev_pass or rank_pass or conf_pass:
+        if ev_pass or conf_pass:
             qualifying.add(cls)
 
     if not qualifying:
@@ -666,7 +664,12 @@ def _run_sim(rewards):
             elif ent>=_entropy_threshold: se+=1
             else: st+=1
             continue
-        pl+=1; hit=tn in top2
+        pl+=1
+        sim_bonus = get_bonus_picks(sc, top2)
+        all_sim_preds = list(top2)
+        if sim_bonus:
+            all_sim_preds += [p for p in sim_bonus if p not in all_sim_preds]
+        hit=tn in all_sim_preds
         sim_play_results.append(hit)
         for order, pred_cls in markov_preds.items():
             sim_markov_hits[order].append(pred_cls == tn)
