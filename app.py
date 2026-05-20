@@ -9,7 +9,7 @@ app = Flask(__name__)
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 DATA_FILE              = "round_data.json"
 SKIP_TOP1_THRESHOLD    = 0.220
-SKIP_ENTROPY_THRESHOLD = 2.8       # raised: 2.70 → 2.80
+SKIP_ENTROPY_THRESHOLD = 2.75       # raised: 2.70 → 2.80
 BRAKE_TRIGGER          = 3
 BRAKE_PAUSE            = 3
 POLL_INTERVAL          = 5
@@ -22,7 +22,7 @@ HIGH_MULT_EV_TARGET = 1.0   # prob * multiplier >= 1.0 qualifies
 
 # Entropy adaptation targets — raised to reduce over-skipping
 TARGET_PLAY_MIN  = 0.45     # was 0.38
-TARGET_PLAY_MAX  = 0.65     # was 0.45
+TARGET_PLAY_MAX  = 0.50     # was 0.45
 ENT_THRESH_MIN   = 2.65
 ENT_THRESH_MAX   = 3.00     # was 2.90
 
