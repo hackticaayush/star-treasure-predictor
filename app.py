@@ -8,21 +8,24 @@ app = Flask(__name__)
 
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 DATA_FILE              = "round_data.json"
-SKIP_TOP1_THRESHOLD    = 0.220      # default (overridden dynamically)
-SKIP_ENTROPY_THRESHOLD = 2.70       # default (overridden dynamically)
-BRAKE_TRIGGER          = 3          # default (overridden dynamically)
-BRAKE_PAUSE            = 3          # default (overridden dynamically)
+SKIP_TOP1_THRESHOLD    = 0.220
+SKIP_ENTROPY_THRESHOLD = 2.75       # raised: 2.70 → 2.75
+BRAKE_TRIGGER          = 3
+BRAKE_PAUSE            = 3
 POLL_INTERVAL          = 5
 
 HIGH_MULT_CLASSES      = {2, 3, 4, 7}
 
-# Entropy adaptation targets
-TARGET_PLAY_MIN  = 0.38
-TARGET_PLAY_MAX  = 0.45
-ENT_THRESH_MIN   = 2.65
-ENT_THRESH_MAX   = 2.90
+# EV multipliers for bonus inclusion
+HIGH_MULT_EV        = {2: 10, 3: 25, 4: 15, 7: 50}
+HIGH_MULT_EV_TARGET = 1.0   # prob * multiplier >= 1.0 qualifies
 
-# Top1 threshold adaptation (mirrors entropy adaptation)
+# Entropy adaptation targets — raised to reduce over-skipping
+TARGET_PLAY_MIN  = 0.45     # was 0.38
+TARGET_PLAY_MAX  = 0.55     # was 0.45
+ENT_THRESH_MIN   = 2.65
+ENT_THRESH_MAX   = 3.00     # was 2.90
+
 TOP1_THRESH_MIN  = 0.190
 TOP1_THRESH_MAX  = 0.260
 TOP1_THRESH_STEP = 0.005
@@ -55,7 +58,6 @@ PATTERN_GROUPS = {
     "cls8":      {"classes": {8},           "default_threshold": 4.0},
 }
 
-# Defaults — overridden dynamically at runtime
 PATTERN_LOOKBACK_DEFAULT = 10
 PATTERN_LOOKBACK_MIN     = 6
 PATTERN_LOOKBACK_MAX     = 16
@@ -66,12 +68,11 @@ PATTERN_DECAY_MAX        = 0.75
 
 PATTERN_HIT_BUFFER       = 100
 
-# Dynamic boost cap — learned from boosted vs non-boosted hit rates
 PATTERN_BOOST_MIN_DEFAULT = 0.15
 PATTERN_BOOST_MAX_DEFAULT = 0.35
 PATTERN_BOOST_SCALE       = 0.04
-PATTERN_BOOST_EVAL_WINDOW = 50     # rounds to measure boosted vs non-boosted
-PATTERN_BOOST_STEP        = 0.02   # how fast boost cap moves
+PATTERN_BOOST_EVAL_WINDOW = 50
+PATTERN_BOOST_STEP        = 0.02
 
 # ── DYNAMIC BRAKE CONFIG ──────────────────────────────────────────────────────
 BRAKE_TRIGGER_MIN      = 2
@@ -99,9 +100,7 @@ TRAIN_ROUNDS_MAX     = 80
 TRAIN_ROUNDS_DEFAULT = 50
 
 # ── DYNAMIC MARKOV WEIGHT CONFIG ──────────────────────────────────────────────
-# Base weights for each Markov order + other signal components
-# These are learned per-order hit rates, updated every cycle
-MARKOV_WEIGHT_BUFFER = 60   # remember last 60 played rounds per order
+MARKOV_WEIGHT_BUFFER = 60
 MARKOV_WEIGHT_MIN    = 0.02
 MARKOV_WEIGHT_MAX    = 0.40
 MARKOV_WEIGHT_STEP   = 0.015
@@ -111,7 +110,7 @@ BONUS_CONF_THRESH_DEFAULT = 0.10
 BONUS_CONF_THRESH_MIN     = 0.06
 BONUS_CONF_THRESH_MAX     = 0.18
 BONUS_CONF_THRESH_STEP    = 0.005
-BONUS_EVAL_WINDOW         = 40    # last N played rounds to evaluate bonus hit rate
+BONUS_EVAL_WINDOW         = 40
 
 # ── GLOBAL STATE ──────────────────────────────────────────────────────────────
 _lock              = threading.Lock()
@@ -142,7 +141,6 @@ _dynamic_decay       = PATTERN_DECAY_DEFAULT
 _dynamic_boost_max   = PATTERN_BOOST_MAX_DEFAULT
 _dynamic_boost_min   = PATTERN_BOOST_MIN_DEFAULT
 
-# Boost effectiveness tracking: list of (was_boosted: bool, hit: bool)
 _boost_eval_log      = []
 
 # ── DYNAMIC BRAKE STATE ───────────────────────────────────────────────────────
@@ -155,24 +153,20 @@ _brake_loss_confs      = []
 _dynamic_train_rounds  = TRAIN_ROUNDS_DEFAULT
 
 # ── DYNAMIC MARKOV WEIGHTS STATE ─────────────────────────────────────────────
-# Per-order correctness buffer: order → [True/False, ...]
-# order 1=m1, 2=m2, 3=m3, 4=m4
 _markov_hit_buf = {1: [], 2: [], 3: [], 4: []}
-# Live weights (updated each cycle)
 _dynamic_markov_w = {
-    "wb":  0.05,   # base frequency
-    "wm1": 0.10,   # order-1 markov
-    "wm2": 0.15,   # order-2 markov
-    "wm3": 0.25,   # order-3 markov
-    "wm4": 0.20,   # order-4 markov
-    "wr":  0.10,   # recency frequency
-    "wv":  0.10,   # short-window frequency
-    "wo":  0.05,   # gap/overdue bonus
+    "wb":  0.05,
+    "wm1": 0.10,
+    "wm2": 0.15,
+    "wm3": 0.25,
+    "wm4": 0.20,
+    "wr":  0.10,
+    "wv":  0.10,
+    "wo":  0.05,
 }
 
 # ── DYNAMIC BONUS THRESHOLD STATE ────────────────────────────────────────────
 _dynamic_bonus_thresh  = BONUS_CONF_THRESH_DEFAULT
-# (was_bonus_play: bool, hit: bool) for recent played rounds
 _bonus_eval_log        = []
 
 
@@ -308,86 +302,46 @@ def build_global_stats(rw):
 
 # ── DYNAMIC TRAIN_ROUNDS ─────────────────────────────────────────────────────
 def compute_dynamic_train_rounds(total_rounds):
-    """
-    Scale warmup window with data volume.
-    Small dataset → smaller warmup (less wasted data).
-    Large dataset → larger warmup (more stable baseline stats).
-    """
-    # Every 100 rounds of data, add ~3 warmup rounds, clamped to [30, 80]
     scaled = TRAIN_ROUNDS_MIN + int((total_rounds / 100) * 3)
     return max(TRAIN_ROUNDS_MIN, min(TRAIN_ROUNDS_MAX, scaled))
 
 # ── DYNAMIC MARKOV WEIGHTS ────────────────────────────────────────────────────
 def recalibrate_markov_weights(hit_bufs):
-    """
-    For each Markov order 1-4, compute recent hit rate.
-    Orders with higher hit rates get boosted weight; lower get reduced.
-    Base/recency/gap weights stay fixed as anchors.
-
-    hit_bufs: {order: [True/False, ...]}
-    Returns updated weight dict.
-    """
     with _lock:
         cur_w = dict(_dynamic_markov_w)
-
     order_keys = {1: "wm1", 2: "wm2", 3: "wm3", 4: "wm4"}
     new_w = dict(cur_w)
-
     for order, key in order_keys.items():
         buf = hit_bufs.get(order, [])
         if len(buf) < 10:
             continue
         window   = buf[-MARKOV_WEIGHT_BUFFER:]
         hit_rate = sum(window) / len(window)
-
-        # Nudge weight toward hit_rate performance
-        # If order is hitting > 65% → boost; < 45% → reduce
         if hit_rate > 0.65:
             new_w[key] = min(MARKOV_WEIGHT_MAX, cur_w[key] + MARKOV_WEIGHT_STEP)
         elif hit_rate < 0.45:
             new_w[key] = max(MARKOV_WEIGHT_MIN, cur_w[key] - MARKOV_WEIGHT_STEP)
-
         if abs(new_w[key] - cur_w[key]) > 0.001:
             print(f"[MarkovW] Order-{order} ({key}): {cur_w[key]:.3f}→{new_w[key]:.3f} "
                   f"(hit_rate={hit_rate:.2%}, n={len(window)})")
-
     return new_w
 
 # ── DYNAMIC PATTERN PARAMS ────────────────────────────────────────────────────
 def recalibrate_pattern_params(total_rounds, sim_hit_rate):
-    """
-    Adjust pattern lookback and decay based on data volume and model health.
-
-    total_rounds  : total data available
-    sim_hit_rate  : recent sim hit rate (hits/played)
-
-    - Lookback scales with data: more data → can look further back
-    - Decay: if model hit rate is low, slow decay (0.3 = more history weight);
-             if hit rate is high, faster decay (0.7 = recent pattern dominant)
-    """
     global _dynamic_lookback, _dynamic_decay
-
-    # Lookback: scale with data volume
-    # 100 rounds → lookback 6; 500 rounds → lookback 12; 800+ → 16
     new_lookback = max(PATTERN_LOOKBACK_MIN,
                        min(PATTERN_LOOKBACK_MAX,
                            int(6 + (total_rounds / 800) * 10)))
-
-    # Decay: inverse relationship with hit rate
-    # Low hit rate (model cold) → slower decay (0.30) = use more history
-    # High hit rate (model hot) → faster decay (0.70) = trust recent pattern
     if sim_hit_rate < 0.50:
         new_decay = max(PATTERN_DECAY_MIN, _dynamic_decay - 0.03)
     elif sim_hit_rate > 0.68:
         new_decay = min(PATTERN_DECAY_MAX, _dynamic_decay + 0.03)
     else:
         new_decay = _dynamic_decay
-
     if new_lookback != _dynamic_lookback:
         print(f"[PatternParam] Lookback: {_dynamic_lookback}→{new_lookback} "
               f"(total_rounds={total_rounds})")
         _dynamic_lookback = new_lookback
-
     if abs(new_decay - _dynamic_decay) > 0.001:
         print(f"[PatternParam] Decay: {_dynamic_decay:.3f}→{new_decay:.3f} "
               f"(sim_hit_rate={sim_hit_rate:.2%})")
@@ -395,43 +349,27 @@ def recalibrate_pattern_params(total_rounds, sim_hit_rate):
 
 # ── DYNAMIC BOOST EFFECTIVENESS ───────────────────────────────────────────────
 def recalibrate_boost_cap(boost_eval_log):
-    """
-    Compare hit rate when pattern boost was triggered vs when it wasn't.
-    If boosted rounds hit less than non-boosted → shrink boost cap.
-    If boosted rounds hit more → boost cap can stay or grow.
-
-    boost_eval_log: list of (was_boosted: bool, hit: bool)
-    """
     global _dynamic_boost_max, _dynamic_boost_min
-
     if len(boost_eval_log) < 20:
         return
-
     window = boost_eval_log[-PATTERN_BOOST_EVAL_WINDOW:]
     boosted_hits   = [h for b, h in window if b]
     unboosted_hits = [h for b, h in window if not b]
-
     if len(boosted_hits) < 5 or len(unboosted_hits) < 5:
         return
-
     boosted_rate   = sum(boosted_hits)   / len(boosted_hits)
     unboosted_rate = sum(unboosted_hits) / len(unboosted_hits)
-
     cur_max = _dynamic_boost_max
     cur_min = _dynamic_boost_min
-
     if boosted_rate < unboosted_rate - 0.05:
-        # Boost is hurting — shrink cap
         new_max = max(PATTERN_BOOST_MIN_DEFAULT, cur_max - PATTERN_BOOST_STEP)
         new_min = max(0.05, cur_min - PATTERN_BOOST_STEP * 0.5)
     elif boosted_rate > unboosted_rate + 0.05:
-        # Boost is helping — allow it to grow
         new_max = min(0.50, cur_max + PATTERN_BOOST_STEP)
         new_min = min(0.25, cur_min + PATTERN_BOOST_STEP * 0.5)
     else:
         new_max = cur_max
         new_min = cur_min
-
     if abs(new_max - cur_max) > 0.001:
         print(f"[BoostCap] max: {cur_max:.3f}→{new_max:.3f} "
               f"(boosted={boosted_rate:.2%} unboosted={unboosted_rate:.2%}, "
@@ -441,42 +379,24 @@ def recalibrate_boost_cap(boost_eval_log):
 
 # ── DYNAMIC BONUS THRESHOLD ───────────────────────────────────────────────────
 def recalibrate_bonus_thresh(bonus_eval_log):
-    """
-    Track whether rounds where a bonus pick was the correct answer
-    actually come from high-confidence bonus classes.
-    If bonus picks are consistently losing → raise threshold (be pickier).
-    If bonus picks are consistently hitting → lower threshold (be more generous).
-
-    bonus_eval_log: list of (was_bonus_correct: bool, bonus_conf: float)
-    Actually simpler: list of (bonus_triggered: bool, hit: bool)
-    """
     global _dynamic_bonus_thresh
-
     if len(bonus_eval_log) < 15:
         return
-
     window = bonus_eval_log[-BONUS_EVAL_WINDOW:]
-    bonus_rounds   = [(triggered, hit) for triggered, hit in window if triggered]
+    bonus_rounds    = [(triggered, hit) for triggered, hit in window if triggered]
     no_bonus_rounds = [(triggered, hit) for triggered, hit in window if not triggered]
-
     if len(bonus_rounds) < 5:
         return
-
     bonus_hit_rate    = sum(h for _, h in bonus_rounds) / len(bonus_rounds)
     no_bonus_hit_rate = (sum(h for _, h in no_bonus_rounds) / len(no_bonus_rounds)
                          if no_bonus_rounds else 0.60)
-
     cur = _dynamic_bonus_thresh
-
     if bonus_hit_rate < no_bonus_hit_rate - 0.08:
-        # Bonus rounds losing more than normal → raise threshold (harder to trigger)
         new_thresh = min(BONUS_CONF_THRESH_MAX, cur + BONUS_CONF_THRESH_STEP)
     elif bonus_hit_rate > no_bonus_hit_rate + 0.05:
-        # Bonus rounds winning more → lower threshold (trigger more often)
         new_thresh = max(BONUS_CONF_THRESH_MIN, cur - BONUS_CONF_THRESH_STEP)
     else:
         new_thresh = cur
-
     if abs(new_thresh - cur) > 0.0001:
         print(f"[BonusThresh] {cur:.4f}→{new_thresh:.4f} "
               f"(bonus_hr={bonus_hit_rate:.2%} base_hr={no_bonus_hit_rate:.2%}, "
@@ -488,10 +408,8 @@ def compute_pattern_scores(rewards):
     with _lock:
         lookback = _dynamic_lookback
         decay    = _dynamic_decay
-
     if len(rewards) < lookback:
         return {g: 0.0 for g in PATTERN_GROUPS}
-
     last_n = rewards[-lookback:]
     scores = {g: 0.0 for g in PATTERN_GROUPS}
     for dist_from_end, cls in enumerate(reversed(last_n)):
@@ -508,11 +426,9 @@ def apply_pattern_boost(scores_dict, pattern_scores, dyn_thresholds):
     with _lock:
         boost_max = _dynamic_boost_max
         boost_min = _dynamic_boost_min
-
     boosted = dict(scores_dict)
     pattern_info = {}
     any_triggered = False
-
     for group_name, group_cfg in PATTERN_GROUPS.items():
         pscore    = pattern_scores.get(group_name, 0.0)
         threshold = dyn_thresholds.get(group_name, group_cfg["default_threshold"])
@@ -535,7 +451,6 @@ def apply_pattern_boost(scores_dict, pattern_scores, dyn_thresholds):
             "boost_applied": round(boost_applied, 4),
         }
     pattern_info["_any_triggered"] = any_triggered
-
     total = sum(boosted.values()) or 1.0
     boosted = {k: v / total for k, v in boosted.items()}
     return boosted, pattern_info
@@ -555,10 +470,8 @@ def update_pattern_hit(group_name, pattern_score):
 # ── DYNAMIC BRAKE CALIBRATION ─────────────────────────────────────────────────
 def recalibrate_brake(play_results, loss_confs):
     global _dynamic_brake_trigger, _dynamic_brake_pause
-
     cur_trigger = _dynamic_brake_trigger
     cur_pause   = _dynamic_brake_pause
-
     new_trigger = cur_trigger
     hitrate     = None
     if len(play_results) >= 10:
@@ -571,7 +484,6 @@ def recalibrate_brake(play_results, loss_confs):
         if new_trigger != cur_trigger:
             print(f"[DynBrake] Trigger: {cur_trigger}→{new_trigger} "
                   f"(hitrate={hitrate:.2%}, window={len(window)})")
-
     new_pause = cur_pause
     avg_conf  = None
     if len(loss_confs) >= 5:
@@ -584,23 +496,15 @@ def recalibrate_brake(play_results, loss_confs):
         if new_pause != cur_pause:
             print(f"[DynBrake] Pause: {cur_pause}→{new_pause} "
                   f"(avg_loss_conf={avg_conf:.4f}, buffer={len(window_confs)})")
-
     return new_trigger, new_pause, hitrate, avg_conf
 
 # ── TOP1 THRESHOLD ADAPTATION ────────────────────────────────────────────────
 def recalibrate_top1_threshold(play_pct):
-    """
-    Mirror entropy threshold adaptation: adjust top1 threshold
-    to keep play% within [TARGET_PLAY_MIN, TARGET_PLAY_MAX].
-    Both thresholds act as independent valves on the same play% target.
-    """
     global _top1_threshold
     cur = _top1_threshold
     if play_pct < TARGET_PLAY_MIN:
-        # Playing too rarely — lower the bar to play more
         new = max(TOP1_THRESH_MIN, cur - TOP1_THRESH_STEP)
     elif play_pct > TARGET_PLAY_MAX:
-        # Playing too often — raise the bar to play less
         new = min(TOP1_THRESH_MAX, cur + TOP1_THRESH_STEP)
     else:
         new = cur
@@ -614,7 +518,6 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar):
     if n<4:
         ranked=sorted(prob.items(),key=lambda x:-x[1])
         return [ranked[0][0],ranked[1][0]],{k:1/8 for k in range(1,9)},3.0,0.125,0.125,0.125,ranked[2][0] if len(ranked)>=3 else None, {}
-
     l1,l2,l3,l4=h[-1],h[-2],h[-3],h[-4]
     k1=(l1,);k2=(l2,l1);k3=(l3,l2,l1);k4=(l4,l3,l2,l1)
     def rel(t,key): return min(1.0,sum(t[key].values())/30) if key in t else 0
@@ -638,11 +541,8 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar):
         while j<len(h) and h[j]==h[i2]: j+=1
         rh[h[i2]].append(j-i2);i2=j
     arh={r:sum(rh[r])/len(rh[r]) if rh.get(r) else ar.get(r,1.5) for r in range(1,9)}
-
-    # ── DYNAMIC MARKOV WEIGHTS ────────────────────────────────────────────────
     with _lock:
         dw = dict(_dynamic_markov_w)
-
     sc={}
     for idx in range(1,9):
         base=prob.get(idx,0)
@@ -655,8 +555,6 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar):
         od=(n-1-pos)/agv if agv else 0
         ob=min(0.5,max(0.0,(od-1.0)*0.1))
         rpen=0.05 if idx==rv and rl2>=arh.get(idx,1.5) else 0
-
-        # Use dynamic weights, scale order weights by their reliability signal
         wb  = dw["wb"]
         wm1 = dw["wm1"]
         wm2 = dw["wm2"] * r2
@@ -665,33 +563,24 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar):
         wr  = dw["wr"]
         wv  = dw["wv"]
         wo  = dw["wo"]
-
         tw  = wb+wm1+wm2+wm3+wm4+wr+wv+wo or 1
         raw = (wb*base+wm1*m1+wm2*m2+wm3*m3+wm4*m4+wr*rp+wv*rsp+wo*ob)
         sc[idx]=max(0.0,raw/tw-rpen)
-
-    # Also capture per-class markov order predictions for hit-tracking
     markov_preds = {}
     for order, tp, key in [(1,tp1,k1),(2,tp2,k2),(3,tp3,k3),(4,tp4,k4)]:
         if key in tp:
             top_cls = max(tp[key], key=tp[key].get)
             markov_preds[order] = top_cls
-
     ts=sum(sc.values()) or 1
     sc={k:v/ts for k,v in sc.items()}
-
-    # ── PATTERN BOOST ────────────────────────────────────────────────────────
     with _lock:
         dyn_thresh = dict(_dynamic_threshold)
-
     pattern_scores = compute_pattern_scores(h)
     sc, pattern_info = apply_pattern_boost(sc, pattern_scores, dyn_thresh)
-
     with _lock:
         _last_pattern_info.clear()
         _last_pattern_info.update(pattern_info)
         _last_pattern_info["raw_scores"] = {g: round(v, 4) for g, v in pattern_scores.items()}
-
     rk=sorted(sc.items(),key=lambda x:-x[1])
     ent=-sum(v*math.log2(v) for v in sc.values() if v>0)
     t3s = rk[2][1] if len(rk) >= 3 else 0.0
@@ -706,48 +595,60 @@ def should_play(t1, ent, brake_active=False):
 
 # ── BONUS PICK LOGIC ──────────────────────────────────────────────────────────
 def get_bonus_picks(scores, top2):
+    """
+    Two pathways to qualify a high-mult class as bonus:
+      1. EV pathway  : prob * multiplier >= 1.0
+      2. Rank/conf   : in top-4 OR above dynamic threshold
+
+    Works for both PLAY and SKIP rounds.
+    Returns list of qualifying class indices (not in top2), or None.
+    """
     with _lock:
         thresh = _dynamic_bonus_thresh
 
-    ranked     = sorted(scores.items(), key=lambda x: -x[1])
-    ranked_ids = [int(k) for k, _ in ranked]
-    in_top4    = bool(set(ranked_ids[:4]).intersection(HIGH_MULT_CLASSES))
-    above_thresh = any(scores.get(k, scores.get(str(k), 0)) > thresh for k in HIGH_MULT_CLASSES)
-    if not in_top4 and not above_thresh:
+    sc_map  = {int(k): float(v) for k, v in scores.items()}
+    ranked  = sorted(sc_map.items(), key=lambda x: -x[1])
+
+    qualifying = set()
+    for cls in HIGH_MULT_CLASSES:
+        prob = sc_map.get(cls, 0.0)
+        mult = HIGH_MULT_EV.get(cls, 1)
+        ev_pass   = (prob * mult) >= HIGH_MULT_EV_TARGET
+        rank_pass = cls in {c for c, _ in ranked[:4]}
+        conf_pass = prob > thresh
+        if ev_pass or rank_pass or conf_pass:
+            qualifying.add(cls)
+
+    if not qualifying:
         return None
-    hm = [(int(k), v) for k, v in ranked if int(k) in HIGH_MULT_CLASSES]
-    if not hm:
+
+    bonus = [cls for cls, _ in ranked
+             if cls in qualifying and cls not in top2]
+
+    if not bonus:
         return None
-    bonus = [cls for cls, _ in hm[:2]]
-    if not [b for b in bonus if b not in top2]:
-        return None
-    return bonus
+
+    return bonus[:2]
+
 
 # ── SIM REBUILD ───────────────────────────────────────────────────────────────
 def _run_sim(rewards):
     total = len(rewards)
-
     with _lock:
         train_rounds = _dynamic_train_rounds
-
     if total < train_rounds + 5:
         return {}, 0, 0.0, [], [], {}
-
     stats = build_global_stats(rewards)
     hits=misses=sk=pl=0; ls=mx=ws=mw=0; brake=0; se=st=sb=0
-
     sim_play_results = []
     sim_loss_confs   = []
-    # Per-order: did that order's top prediction match actual?
     sim_markov_hits  = {1:[], 2:[], 3:[], 4:[]}
-    sim_boost_log    = []   # (was_boosted, hit)
-    sim_bonus_log    = []   # (bonus_triggered, hit)
-
+    sim_boost_log    = []
+    sim_bonus_log    = []
     with _lock:
         cur_trigger   = _dynamic_brake_trigger
         cur_pause     = _dynamic_brake_pause
         cur_top1_t    = _top1_threshold
-
     for i in range(train_rounds, total - 1):
         h=rewards[:i+1]; tn=rewards[i+1]
         top2,sc,ent,t1s,_,_,_,markov_preds = score_round(h,*stats)
@@ -760,38 +661,27 @@ def _run_sim(rewards):
             elif ent>=_entropy_threshold: se+=1
             else: st+=1
             continue
-
         pl+=1; hit=tn in top2
         sim_play_results.append(hit)
-
-        # Track per-order Markov hit
         for order, pred_cls in markov_preds.items():
             sim_markov_hits[order].append(pred_cls == tn)
-
-        # Track boost effectiveness
         with _lock:
             pat_info = dict(_last_pattern_info)
         any_triggered = pat_info.get("_any_triggered", False)
         sim_boost_log.append((any_triggered, hit))
-
-        # Track bonus effectiveness
         bonus = get_bonus_picks(sc, top2)
         bonus_triggered = bonus is not None
         sim_bonus_log.append((bonus_triggered, hit))
-
         if hit:
             hits+=1; ls=0; ws+=1; mw=max(mw,ws)
         else:
             misses+=1; ls+=1; mx=max(mx,ls); ws=0
             sim_loss_confs.append(t1s)
-
         if ls >= cur_trigger:
             brake = cur_pause
-
     sim_total = total - train_rounds - 1
     acc       = hits / pl * 100 if pl else 0
     play_pct  = pl / sim_total if sim_total else 0.0
-
     return {
         "total":total,"sim_total":sim_total,
         "played":pl,"skipped":sk,"hits":hits,"misses":misses,
@@ -820,24 +710,18 @@ def _build_cached_pred(rewards, raw_rounds, brake):
         decay         = _dynamic_decay
         bonus_thresh  = _dynamic_bonus_thresh
         dw            = dict(_dynamic_markov_w)
-
     if len(rewards) < train_rounds + 5:
         return None
-
     stats = build_global_stats(rewards)
     top2, scores, ent, t1s, t2s, t3s, t3c, _ = score_round(rewards, *stats)
     eth = _entropy_threshold
-
     play = t1s > cur_top1_t and ent < eth and brake == 0
-
     skip_reason = None
     if brake > 0:              skip_reason = f"Loss brake ({brake} rounds left)"
     elif ent >= eth:           skip_reason = f"High entropy ({ent:.4f} ≥ {eth:.3f})"
     elif t1s <= cur_top1_t:    skip_reason = f"Low confidence ({t1s:.4f} ≤ {cur_top1_t:.4f})"
-
     last_round = raw_rounds[-1]["round"] if raw_rounds else None
     next_round = (last_round + 1) if last_round else None
-
     SMALL_MULT = {1, 5, 6, 8}
     pred3       = None
     pred3_conf  = None
@@ -846,21 +730,30 @@ def _build_cached_pred(rewards, raw_rounds, brake):
         pred3      = t3c
         pred3_conf = round(t3s * 100, 2)
 
-    bonus_picks   = get_bonus_picks(scores, top2) if play else None
+    # ── BONUS PICKS: computed for BOTH play and skip ──────────────────────────
+    bonus_picks = get_bonus_picks(scores, top2)
+
     bonus_details = None
     if bonus_picks:
         sc_map = {int(k): v for k, v in scores.items()}
-        bonus_details = [
-            {"idx": b, "name": CLASS_NAMES.get(b,"?"),
-             "color": CLASS_COLORS.get(b,"#888"),
-             "conf": round(sc_map.get(b,0)*100, 2)}
-            for b in bonus_picks
-        ]
+        bonus_details = []
+        for b in bonus_picks:
+            prob = sc_map.get(b, 0.0)
+            mult = HIGH_MULT_EV.get(b, 1)
+            ev   = round(prob * mult, 3)
+            ev_triggered = ev >= HIGH_MULT_EV_TARGET
+            bonus_details.append({
+                "idx":          b,
+                "name":         CLASS_NAMES.get(b, "?"),
+                "color":        CLASS_COLORS.get(b, "#888"),
+                "conf":         round(prob * 100, 2),
+                "ev":           round(ev, 3),
+                "ev_triggered": ev_triggered,
+            })
 
     with _lock:
         pattern_snap    = dict(_last_pattern_info)
         dyn_thresh_snap = dict(_dynamic_threshold)
-
     pattern_summary = {}
     for g, info in pattern_snap.items():
         if g in ("raw_scores", "_any_triggered"):
@@ -872,7 +765,6 @@ def _build_cached_pred(rewards, raw_rounds, brake):
                 "triggered":     info.get("triggered", False),
                 "boost_applied": info.get("boost_applied", 0.0),
             }
-
     return {
         "next_round":         next_round,   "latest_round":  last_round,
         "pred1":              top2[0],      "pred2":         top2[1],
@@ -890,6 +782,7 @@ def _build_cached_pred(rewards, raw_rounds, brake):
         "action":             "PLAY" if play else "SKIP",
         "skip_reason":        skip_reason,
         "bonus_picks":        bonus_details,
+        "skip_show_bonus_only": (not play) and (bonus_details is not None),
         "all_scores":         {k: round(v*100,2) for k,v in scores.items()},
         "last_10":            rewards[-10:],
         "total_rounds":       len(rewards),
@@ -931,13 +824,10 @@ def fetcher_loop():
                 _do_reset()
                 time.sleep(POLL_INTERVAL)
                 continue
-
             with _lock:
                 _fetch_status["last_attempt"] = time.strftime("%H:%M:%S")
                 _fetch_status["status"]       = "fetching"
-
             count, records = fetch_new()
-
             with _lock:
                 if count > 0:
                     _fetch_status["last_success"]  = time.strftime("%H:%M:%S")
@@ -947,14 +837,12 @@ def fetcher_loop():
                 else:
                     if _fetch_status.get("status") != "error":
                         _fetch_status["status"] = "ok_no_new"
-
             if count > 0:
                 rewards = [r["reward_index"] for r in records]
                 with _lock:
                     _raw_rounds.clear(); _raw_rounds.extend(records)
                     _rewards.clear();    _rewards.extend(rewards)
                     pending = _pending_pred
-
                 if pending is not None:
                     pred_round = pending["round"]
                     actual_rec = next((r for r in records if r["round"] == pred_round), None)
@@ -964,13 +852,9 @@ def fetcher_loop():
                         if pending.get("bonus_picks"):
                             all_preds += [p for p in pending["bonus_picks"] if p not in all_preds]
                         hit = actual_val in all_preds
-
-                        # ── UPDATE PATTERN THRESHOLDS ON HIT ─────────────────
                         if hit and pending.get("pattern_scores"):
                             for group_name, pscore in pending["pattern_scores"].items():
                                 update_pattern_hit(group_name, pscore)
-
-                        # ── UPDATE LIVE BRAKE BUFFERS ─────────────────────────
                         with _lock:
                             _brake_play_results.append(hit)
                             if len(_brake_play_results) > BRAKE_HITRATE_WINDOW * 2:
@@ -981,32 +865,23 @@ def fetcher_loop():
                                     _brake_loss_confs.pop(0)
                             play_results_snap = list(_brake_play_results)
                             loss_confs_snap   = list(_brake_loss_confs)
-
                         new_trigger, new_pause, _, _ = recalibrate_brake(
                             play_results_snap, loss_confs_snap)
                         with _lock:
                             _dynamic_brake_trigger = new_trigger
                             _dynamic_brake_pause   = new_pause
-
-                        # ── UPDATE BOOST EVAL LOG ─────────────────────────────
                         with _lock:
                             _boost_eval_log.append((pending.get("any_boosted", False), hit))
                             if len(_boost_eval_log) > PATTERN_BOOST_EVAL_WINDOW * 3:
                                 _boost_eval_log.pop(0)
                             boost_log_snap = list(_boost_eval_log)
-
                         recalibrate_boost_cap(boost_log_snap)
-
-                        # ── UPDATE BONUS EVAL LOG ─────────────────────────────
                         with _lock:
                             _bonus_eval_log.append((pending.get("bonus_triggered", False), hit))
                             if len(_bonus_eval_log) > BONUS_EVAL_WINDOW * 3:
                                 _bonus_eval_log.pop(0)
                             bonus_log_snap = list(_bonus_eval_log)
-
                         recalibrate_bonus_thresh(bonus_log_snap)
-
-                        # ── UPDATE MARKOV HIT BUFFERS ─────────────────────────
                         markov_preds_pending = pending.get("markov_preds", {})
                         with _lock:
                             for order, pred_cls in markov_preds_pending.items():
@@ -1014,11 +889,9 @@ def fetcher_loop():
                                 if len(_markov_hit_buf[order]) > MARKOV_WEIGHT_BUFFER * 3:
                                     _markov_hit_buf[order].pop(0)
                             markov_buf_snap = {o: list(v) for o, v in _markov_hit_buf.items()}
-
                         new_mw = recalibrate_markov_weights(markov_buf_snap)
                         with _lock:
                             _dynamic_markov_w.update(new_mw)
-
                         entry = {
                             "round": pred_round, "top2": pending["top2"],
                             "top3":  pending.get("top3"),
@@ -1031,29 +904,21 @@ def fetcher_loop():
                         pending = None
                         print(f"[Live] #{pred_round}: pred={entry['top2']} "
                               f"actual={actual_val} → {'HIT ✓' if hit else 'MISS ✗'}")
-
                     elif records and pred_round <= records[-1]["round"]:
                         with _lock:
                             _pending_pred = None
                         pending = None
                         print(f"[Fetcher] Stale pending cleared (#{pred_round})")
-
                 sim_dict, brake, play_pct, sim_play_res, sim_loss_confs, sim_extras = \
                     _run_sim(rewards)
-
-                # ── RECALIBRATE ALL DYNAMIC PARAMS FROM SIM ───────────────────
                 total_rounds = len(rewards)
                 sim_hit_rate = (sim_dict.get("hits", 0) / sim_dict.get("played", 1)
                                 if sim_dict.get("played", 0) > 0 else 0.60)
-
-                # 1. Dynamic train rounds
                 new_tr = compute_dynamic_train_rounds(total_rounds)
                 if new_tr != _dynamic_train_rounds:
                     print(f"[TrainRounds] {_dynamic_train_rounds}→{new_tr} "
                           f"(total_rounds={total_rounds})")
                     _dynamic_train_rounds = new_tr
-
-                # 2. Entropy threshold
                 cur = _entropy_threshold
                 if play_pct < TARGET_PLAY_MIN:   new_eth = min(ENT_THRESH_MAX, cur + 0.034)
                 elif play_pct > TARGET_PLAY_MAX: new_eth = max(ENT_THRESH_MIN, cur - 0.034)
@@ -1063,26 +928,16 @@ def fetcher_loop():
                           f"(play%={play_pct*100:.1f}%)")
                 _entropy_threshold = new_eth
                 sim_dict["entropy_threshold"] = round(new_eth, 3)
-
-                # 3. Top1 threshold
                 recalibrate_top1_threshold(play_pct)
-
-                # 4. Pattern lookback + decay
                 recalibrate_pattern_params(total_rounds, sim_hit_rate)
-
-                # 5. Boost cap (from sim boost log if live log is thin)
                 with _lock:
                     live_boost_len = len(_boost_eval_log)
                 if live_boost_len < 20 and sim_extras.get("boost_log"):
                     recalibrate_boost_cap(sim_extras["boost_log"])
-
-                # 6. Bonus threshold (from sim if live log thin)
                 with _lock:
                     live_bonus_len = len(_bonus_eval_log)
                 if live_bonus_len < 15 and sim_extras.get("bonus_log"):
                     recalibrate_bonus_thresh(sim_extras["bonus_log"])
-
-                # 7. Markov weights (from sim if live buffers thin)
                 with _lock:
                     live_markov_len = min(len(v) for v in _markov_hit_buf.values())
                 if live_markov_len < 10 and sim_extras.get("markov_hits"):
@@ -1092,8 +947,6 @@ def fetcher_loop():
                         if not any(_markov_hit_buf.values()):
                             for o, v in sim_extras["markov_hits"].items():
                                 _markov_hit_buf[o].extend(v[-MARKOV_WEIGHT_BUFFER:])
-
-                # 8. Brake (from sim if live buffers thin)
                 with _lock:
                     live_buf_len = len(_brake_play_results)
                 if live_buf_len < 10 and sim_play_res:
@@ -1108,21 +961,17 @@ def fetcher_loop():
                         if not _brake_loss_confs:
                             _brake_loss_confs.extend(seed_confs)
                     print(f"[DynBrake] Seeded: trigger={new_trigger} pause={new_pause}")
-
                 with _lock:
                     _sim_stats.clear(); _sim_stats.update(sim_dict)
                     _brake_left = brake
-
                 cached = _build_cached_pred(rewards, records, brake)
                 with _lock:
                     _cached_pred = cached
-
                 if cached and cached["_play"] and cached["_next_round"] is not None:
                     nr = cached["_next_round"]
                     with _lock:
                         cur_p = _pending_pred
                     if cur_p is None or cur_p["round"] != nr:
-                        # Get current markov preds for live tracking
                         stats_now = build_global_stats(rewards)
                         _, _, _, _, _, _, _, mp = score_round(rewards, *stats_now)
                         np_ = {
@@ -1144,11 +993,9 @@ def fetcher_loop():
                               f"top1_t={cached['top1_threshold']} "
                               f"lookback={cached['pattern_lookback']} "
                               f"decay={cached['pattern_decay']}")
-
                 with _lock:
                     lr = _raw_rounds[-1]["round"] if _raw_rounds else "?"
                 print(f"[Fetcher] +{count} rounds. Latest: #{lr}. Total: {len(records)}")
-
         except Exception as e:
             print(f"[Fetcher] Unexpected: {e}")
             import traceback; traceback.print_exc()
@@ -1334,7 +1181,6 @@ def api_brake():
 
 @app.route("/api/adaptive")
 def api_adaptive():
-    """Single endpoint showing all live dynamic parameter values and their ranges."""
     with _lock:
         return jsonify({
             "entropy_threshold":   {"value": round(_entropy_threshold, 4),
@@ -1358,6 +1204,9 @@ def api_adaptive():
             "markov_weights":      {k: round(v, 4) for k, v in _dynamic_markov_w.items()},
             "markov_weight_range": {"min": MARKOV_WEIGHT_MIN, "max": MARKOV_WEIGHT_MAX},
             "play_target":         {"min": TARGET_PLAY_MIN, "max": TARGET_PLAY_MAX},
+            "ev_thresholds":       {str(cls): {"multiplier": mult,
+                                               "min_prob": round(HIGH_MULT_EV_TARGET/mult, 4)}
+                                    for cls, mult in HIGH_MULT_EV.items()},
         })
 
 # ── STARTUP ───────────────────────────────────────────────────────────────────
@@ -1377,24 +1226,16 @@ def startup():
         with _lock:
             _raw_rounds.extend(records)
             _rewards.extend(rewards)
-
         total_rounds = len(records)
-
-        # Compute dynamic train_rounds before sim
         _dynamic_train_rounds = compute_dynamic_train_rounds(total_rounds)
         print(f"[Startup] Loaded {total_rounds} rounds. "
               f"train_rounds={_dynamic_train_rounds}. Building sim...")
-
         sim_dict, brake, play_pct, sim_play_res, sim_loss_confs, sim_extras = \
             _run_sim(rewards)
-
         sim_hit_rate = (sim_dict.get("hits", 0) / sim_dict.get("played", 1)
                         if sim_dict.get("played", 0) > 0 else 0.60)
-
-        # Seed all dynamic params from sim
         recalibrate_pattern_params(total_rounds, sim_hit_rate)
         recalibrate_top1_threshold(play_pct)
-
         if sim_extras.get("boost_log"):
             recalibrate_boost_cap(sim_extras["boost_log"])
         if sim_extras.get("bonus_log"):
@@ -1405,7 +1246,6 @@ def startup():
                 _dynamic_markov_w.update(new_mw)
                 for o, v in sim_extras["markov_hits"].items():
                     _markov_hit_buf[o].extend(v[-MARKOV_WEIGHT_BUFFER:])
-
         if sim_play_res:
             seed_results = sim_play_res[-BRAKE_HITRATE_WINDOW:]
             seed_confs   = sim_loss_confs[-BRAKE_CONF_BUFFER:]
@@ -1416,22 +1256,18 @@ def startup():
                 _brake_play_results.extend(seed_results)
                 _brake_loss_confs.extend(seed_confs)
             print(f"[Startup] DynBrake: trigger={new_trigger} pause={new_pause}")
-
         cur = _entropy_threshold
         if play_pct < TARGET_PLAY_MIN:   new_eth = min(ENT_THRESH_MAX, cur + 0.034)
         elif play_pct > TARGET_PLAY_MAX: new_eth = max(ENT_THRESH_MIN, cur - 0.034)
         else:                            new_eth = cur
         _entropy_threshold = new_eth
         sim_dict["entropy_threshold"] = round(new_eth, 3)
-
         with _lock:
             _sim_stats.update(sim_dict)
             _brake_left = brake
-
         cached = _build_cached_pred(rewards, records, brake)
         with _lock:
             _cached_pred = cached
-
         if cached and cached["_play"] and cached["_next_round"] is not None:
             stats_now = build_global_stats(rewards)
             _, _, _, _, _, _, _, mp = score_round(rewards, *stats_now)
@@ -1448,7 +1284,6 @@ def startup():
             }
             print(f"[Startup] Pending → #{_pending_pred['round']} "
                   f"top2={_pending_pred['top2']}")
-
         action = cached.get("action","N/A") if cached else "N/A"
         print(f"[Startup] Done — acc={sim_dict.get('accuracy')}% "
               f"brake={brake} action={action} "
