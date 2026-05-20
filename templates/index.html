@@ -16,9 +16,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 
 <style>
-/* ════════════════════════════════════════════
-   BASE / RESET
-════════════════════════════════════════════ */
 :root {
   --gold:   #ffd700;
   --gold2:  #ffab00;
@@ -33,68 +30,27 @@
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{width:100%;overflow-x:hidden;}
-body{
-  font-family:'Nunito',sans-serif;
-  min-height:100vh;
-  background:#07052a;
-  color:#fff;
-}
+body{font-family:'Nunito',sans-serif;min-height:100vh;background:#07052a;color:#fff;}
 
-/* ── BACKGROUND ── */
-#bg {
+#bg{
   position:fixed;inset:0;z-index:0;
-  background:
-    url('https://m.starmakerstudios.com/cdn/vue/agile-vue3/views/spa-rhapsody-music/web-sync/img/bg@2x-61138.jpg?imageMogr2/format/webp')
-    center center / cover no-repeat;
+  background:url('https://m.starmakerstudios.com/cdn/vue/agile-vue3/views/spa-rhapsody-music/web-sync/img/bg@2x-61138.jpg?imageMogr2/format/webp') center center/cover no-repeat;
   filter:brightness(0.65) saturate(1.3);
 }
-#bg::after{
-  content:'';position:absolute;inset:0;
-  background:radial-gradient(ellipse 85% 85% at 50% 50%, transparent 25%, rgba(4,2,22,0.6) 100%);
-}
+#bg::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 85% 85% at 50% 50%,transparent 25%,rgba(4,2,22,0.6) 100%);}
 
-/* ════════════════════════════════════════════
-   SCREEN SYSTEM
-════════════════════════════════════════════ */
-.screen{
-  position:fixed;inset:0;z-index:10;
-  display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-  padding:24px 20px;
-  opacity:0;pointer-events:none;
-  transition:opacity .4s ease;
-}
+.screen{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 20px;opacity:0;pointer-events:none;transition:opacity .4s ease;}
 .screen.active{opacity:1;pointer-events:all;}
 
-/* ════════════════════════════════════════════
-   SCREEN 1 — BROWSER GATE
-════════════════════════════════════════════ */
-#s-browser {
-  text-align:center;
-  background:rgba(4,2,22,0.92);
-  backdrop-filter:blur(30px);
-}
-.gate-logo{
-  font-family:'Lilita One',cursive;font-size:36px;letter-spacing:2px;
-  background:linear-gradient(180deg,#fff 0%,#ffd700 50%,#ff9800 100%);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
-  filter:drop-shadow(0 2px 18px rgba(255,200,0,0.5));margin-bottom:6px;
-}
+/* SCREEN 1 */
+#s-browser{text-align:center;background:rgba(4,2,22,0.92);backdrop-filter:blur(30px);}
+.gate-logo{font-family:'Lilita One',cursive;font-size:36px;letter-spacing:2px;background:linear-gradient(180deg,#fff 0%,#ffd700 50%,#ff9800 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 2px 18px rgba(255,200,0,0.5));margin-bottom:6px;}
 .gate-sub{font-size:13px;color:var(--muted);font-weight:700;letter-spacing:1px;margin-bottom:40px;}
-.gate-card{
-  background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);
-  border-radius:22px;padding:28px 24px;width:100%;max-width:360px;margin-bottom:20px;
-}
+.gate-card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:22px;padding:28px 24px;width:100%;max-width:360px;margin-bottom:20px;}
 .gate-icon{font-size:52px;margin-bottom:16px;}
 .gate-title{font-family:'Lilita One',cursive;font-size:22px;color:var(--gold);margin-bottom:10px;}
 .gate-desc{font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:24px;}
-.install-btn{
-  display:flex;align-items:center;justify-content:center;gap:10px;
-  width:100%;padding:15px;border-radius:14px;border:none;cursor:pointer;
-  font-family:'Lilita One',cursive;font-size:18px;letter-spacing:1px;
-  background:linear-gradient(135deg,#ffd700,#ff9800);color:#07052a;
-  box-shadow:0 4px 30px rgba(255,215,0,0.3);transition:transform .15s,box-shadow .15s;
-}
+.install-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:15px;border-radius:14px;border:none;cursor:pointer;font-family:'Lilita One',cursive;font-size:18px;letter-spacing:1px;background:linear-gradient(135deg,#ffd700,#ff9800);color:#07052a;box-shadow:0 4px 30px rgba(255,215,0,0.3);transition:transform .15s,box-shadow .15s;}
 .install-btn:active{transform:scale(0.97);}
 .install-btn:disabled{background:rgba(255,255,255,0.1);color:var(--muted);box-shadow:none;cursor:default;}
 .gate-steps{width:100%;max-width:360px;text-align:left;}
@@ -103,9 +59,7 @@ body{
 .step-n{width:22px;height:22px;border-radius:50%;flex-shrink:0;background:rgba(255,215,0,0.12);border:1px solid rgba(255,215,0,0.3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--gold);margin-top:1px;}
 .ios-steps{display:none;}
 
-/* ════════════════════════════════════════════
-   SCREEN 2 — UUID REVEAL
-════════════════════════════════════════════ */
+/* SCREEN 2 */
 #s-uuid{background:rgba(4,2,22,0.92);backdrop-filter:blur(30px);text-align:center;}
 .uuid-logo{font-family:'Lilita One',cursive;font-size:30px;background:linear-gradient(180deg,#fff 0%,#ffd700 50%,#ff9800 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:4px;}
 .uuid-badge{display:inline-block;background:rgba(0,229,255,0.1);border:1px solid rgba(0,229,255,0.3);border-radius:20px;padding:4px 14px;font-size:11px;font-weight:800;color:var(--cyan);letter-spacing:2px;margin-bottom:32px;}
@@ -122,87 +76,41 @@ body{
 .uuid-warn strong{color:var(--orange);}
 .uuid-note{font-size:11px;color:rgba(255,255,255,0.2);margin-top:16px;line-height:1.7;}
 
-/* ════════════════════════════════════════════
-   SCREEN 3 — VERIFYING
-════════════════════════════════════════════ */
+/* SCREEN 3 */
 #s-verify{background:rgba(4,2,22,0.95);backdrop-filter:blur(30px);text-align:center;}
 .verify-spinner{width:56px;height:56px;border:3px solid rgba(255,215,0,0.12);border-top-color:var(--gold);border-radius:50%;animation:spin .9s linear infinite;margin:0 auto 24px;}
 .verify-title{font-family:'Lilita One',cursive;font-size:22px;color:var(--gold);margin-bottom:8px;}
 .verify-sub{font-size:13px;color:var(--muted);}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* ════════════════════════════════════════════
-   SCREEN 4 — ACCESS DENIED
-════════════════════════════════════════════ */
+/* SCREEN 4 */
 #s-denied{background:rgba(4,2,22,0.95);backdrop-filter:blur(30px);text-align:center;}
 .denied-icon{font-size:64px;margin-bottom:20px;}
 .denied-title{font-family:'Lilita One',cursive;font-size:26px;color:var(--red);margin-bottom:10px;}
 .denied-msg{font-size:14px;color:var(--muted);line-height:1.7;max-width:320px;}
 .denied-status{margin-top:20px;display:inline-block;background:rgba(255,68,68,0.1);border:1px solid rgba(255,68,68,0.25);border-radius:20px;padding:6px 18px;font-size:12px;font-weight:800;color:var(--red);letter-spacing:1px;}
 
-/* ════════════════════════════════════════════
-   SCREEN 5 — MAIN APP
-════════════════════════════════════════════ */
-#s-app{
-  position:fixed;inset:0;z-index:10;
-  overflow-y:auto;
-  display:none;
-  flex-direction:column;
-  opacity:0;
-  transition:opacity .4s ease;
-}
+/* SCREEN 5 */
+#s-app{position:fixed;inset:0;z-index:10;overflow-y:auto;display:none;flex-direction:column;opacity:0;transition:opacity .4s ease;}
 #s-app.active{display:flex;opacity:1;pointer-events:all;}
+#wrap{position:relative;z-index:1;max-width:440px;margin:0 auto;padding:0 10px 56px;width:100%;}
 
-#wrap{
-  position:relative;z-index:1;
-  max-width:440px;margin:0 auto;
-  padding:0 10px 56px;width:100%;
-}
-
-/* ════════════════════════════════
-   HEADER
-════════════════════════════════ */
 .hdr{text-align:center;padding:20px 0 10px;}
-.hdr-title{
-  font-family:'Lilita One',cursive;font-size:32px;letter-spacing:2px;
-  background:linear-gradient(180deg,#fff 0%,#ffd700 50%,#ff9800 100%);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
-  filter:drop-shadow(0 2px 14px rgba(255,200,0,0.55));margin-bottom:8px;
-}
-
-/* ── COMBINED status + refresh pill ── */
-.hdr-pill{
-  display:inline-flex;align-items:center;gap:8px;
-  background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.16);
-  border-radius:30px;padding:6px 16px;
-  font-size:12px;font-weight:700;color:var(--muted);letter-spacing:0.5px;
-}
+.hdr-title{font-family:'Lilita One',cursive;font-size:32px;letter-spacing:2px;background:linear-gradient(180deg,#fff 0%,#ffd700 50%,#ff9800 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 2px 14px rgba(255,200,0,0.55));margin-bottom:8px;}
+.hdr-pill{display:inline-flex;align-items:center;gap:8px;background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.16);border-radius:30px;padding:6px 16px;font-size:12px;font-weight:700;color:var(--muted);letter-spacing:0.5px;}
 .ldot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 9px var(--green);animation:blink 1.6s infinite;flex-shrink:0;}
 .cdot{width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 7px var(--cyan);animation:blink 1.6s infinite;flex-shrink:0;}
 .pill-divider{width:1px;height:12px;background:rgba(255,255,255,0.18);flex-shrink:0;}
 .pill-cd{background:rgba(0,0,0,0.3);border-radius:20px;padding:2px 8px;font-size:11px;color:rgba(255,255,255,0.45);font-family:'Share Tech Mono',monospace;}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
 
-/* ════════════════════════════════
-   GLASS CARD
-════════════════════════════════ */
 .card{background:var(--card);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid var(--cbord);border-radius:var(--r);padding:16px;margin-bottom:10px;box-shadow:0 8px 36px rgba(0,0,0,0.5);}
 .ctitle{font-family:'Lilita One',cursive;font-size:13px;letter-spacing:1.5px;color:var(--gold);text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
 .ctitle::after{content:'';flex:1;height:1px;background:rgba(255,215,0,0.18);}
 
-/* ════════════════════════════════
-   ARENA CARD
-════════════════════════════════ */
-.arena{
-  background:rgba(6,4,32,0.82);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);
-  border:1px solid rgba(160,100,255,0.22);border-radius:22px;
-  padding:16px 14px 18px;margin-bottom:10px;
-  box-shadow:0 0 70px rgba(110,50,255,0.14),0 8px 40px rgba(0,0,0,0.65);
-  position:relative;overflow:hidden;
-}
+.arena{background:rgba(6,4,32,0.82);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);border:1px solid rgba(160,100,255,0.22);border-radius:22px;padding:16px 14px 18px;margin-bottom:10px;box-shadow:0 0 70px rgba(110,50,255,0.14),0 8px 40px rgba(0,0,0,0.65);position:relative;overflow:hidden;}
 .arena::before{content:'';position:absolute;inset:0;border-radius:22px;background:radial-gradient(ellipse 80% 55% at 50% 0%,rgba(150,70,255,0.09) 0%,transparent 65%);pointer-events:none;}
 
-/* Round number row */
 .rrow{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
 .rnum{font-family:'Lilita One',cursive;font-size:22px;color:var(--gold);text-shadow:0 0 18px rgba(255,215,0,0.5);}
 .reset-pill{font-size:10px;color:var(--muted);font-family:'Share Tech Mono',monospace;background:rgba(0,0,0,0.35);border-radius:10px;padding:3px 9px;border:1px solid rgba(255,255,255,0.1);}
@@ -213,7 +121,6 @@ body{
 .aicon{font-size:24px;flex-shrink:0;line-height:1;}
 .asub{font-family:'Nunito',sans-serif;font-size:12px;font-weight:600;opacity:0.6;margin-top:2px;}
 
-/* ── PICKS ── */
 .picks{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:18px;flex-wrap:nowrap;}
 .ppick{display:flex;flex-direction:column;align-items:center;gap:7px;flex:1;min-width:0;}
 .ppick-rank{font-size:9px;font-weight:800;color:var(--muted);letter-spacing:2px;text-transform:uppercase;}
@@ -234,6 +141,7 @@ body{
 .picks-or{font-family:'Lilita One',cursive;font-size:22px;color:rgba(255,255,255,0.25);flex-shrink:0;}
 .picks-or.sm{font-size:16px;}
 
+/* bonus section — shared for PLAY and SKIP */
 .bonus-sec{background:linear-gradient(135deg,rgba(255,152,0,0.11),rgba(255,100,0,0.04));border:1.5px solid rgba(255,152,0,0.38);border-radius:14px;padding:13px 12px 10px;margin-bottom:16px;position:relative;overflow:hidden;}
 .bonus-sec::after{content:'🎰';position:absolute;right:6px;top:-2px;font-size:44px;opacity:0.09;pointer-events:none;}
 .bonus-hdr{display:flex;align-items:center;gap:6px;margin-bottom:11px;}
@@ -247,6 +155,8 @@ body{
 .bconf{font-size:10px;color:rgba(255,152,0,0.5);font-family:'Share Tech Mono',monospace;}
 .bor{font-family:'Lilita One',cursive;font-size:16px;color:rgba(255,152,0,0.28);flex-shrink:0;}
 .bnote{margin-top:9px;text-align:center;font-size:10px;font-weight:800;color:rgba(255,152,0,0.55);letter-spacing:0.5px;}
+/* skip-only bonus note */
+.bnote-skip{margin-top:9px;text-align:center;font-size:10px;font-weight:800;color:rgba(255,152,0,0.7);letter-spacing:0.5px;background:rgba(255,152,0,0.07);border-radius:8px;padding:5px 8px;}
 
 .entrow{display:flex;justify-content:space-between;font-size:11px;margin-bottom:5px;color:var(--muted);font-weight:700;}
 .entval{font-family:'Share Tech Mono',monospace;}
@@ -274,9 +184,6 @@ body{
 .srow.spick .spct{color:var(--gold);}
 .srow.sbonus .spct{color:var(--orange);}
 
-/* ════════════════════════════════
-   LIVE RESULTS STATS
-════════════════════════════════ */
 .sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;}
 .sbox{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:12px 6px;text-align:center;}
 .sval{font-family:'Lilita One',cursive;font-size:22px;color:var(--cyan);line-height:1;}
@@ -335,7 +242,7 @@ body{
 <body>
 <div id="bg"></div>
 
-<!-- SCREEN 1: Browser Gate -->
+<!-- SCREEN 1 -->
 <div class="screen" id="s-browser">
   <div class="gate-logo">✨ TREASURE AI ✨</div>
   <div class="gate-sub">INSTALL REQUIRED TO ACCESS</div>
@@ -359,7 +266,7 @@ body{
   </div>
 </div>
 
-<!-- SCREEN 2: UUID Reveal -->
+<!-- SCREEN 2 -->
 <div class="screen" id="s-uuid">
   <div class="uuid-logo">✨ TREASURE AI ✨</div>
   <div class="uuid-badge">YOUR ACCESS KEY</div>
@@ -376,14 +283,14 @@ body{
   <div class="uuid-note">After sharing your UUID with admin,<br>close and reopen the app to check access.</div>
 </div>
 
-<!-- SCREEN 3: Verifying -->
+<!-- SCREEN 3 -->
 <div class="screen" id="s-verify">
   <div class="verify-spinner"></div>
   <div class="verify-title">Verifying Access...</div>
   <div class="verify-sub">Please wait a moment</div>
 </div>
 
-<!-- SCREEN 4: Access Denied -->
+<!-- SCREEN 4 -->
 <div class="screen" id="s-denied">
   <div class="denied-icon" id="deniedIcon">🚫</div>
   <div class="denied-title" id="deniedTitle">Access Denied</div>
@@ -391,12 +298,11 @@ body{
   <div class="denied-status" id="deniedStatus">NO ACCESS</div>
 </div>
 
-<!-- SCREEN 5: Main App -->
+<!-- SCREEN 5 -->
 <div id="s-app">
   <div id="wrap">
     <div class="hdr">
       <div class="hdr-title">✨ TREASURE AI ✨</div>
-      <!-- COMBINED: Live status + auto-refresh countdown in one single pill -->
       <div class="hdr-pill">
         <span class="ldot"></span>
         <span id="statusText">Connecting...</span>
@@ -415,9 +321,6 @@ body{
 </div>
 
 <script>
-/* ════════════════════════════════════════════════════
-   CONFIG
-════════════════════════════════════════════════════ */
 const SHARED_SECRET   = "TreasureAI-S3cr3t-K3y-Change-This-2025!xQ9mZ";
 const WORKER_URL      = "https://noisy-truth-6bf7.aayushraj699.workers.dev/verify";
 const IDB_DB_NAME     = "TreasureAI";
@@ -426,24 +329,14 @@ const IDB_UUID_KEY    = "uuid";
 const IDB_ACCESS_KEY  = "access_cache";
 const ACCESS_CACHE_MS = 30 * 60 * 1000;
 
-/* ════════════════════════════════════════════════════
-   SCREEN MANAGER
-════════════════════════════════════════════════════ */
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   const appEl = document.getElementById('s-app');
   appEl.classList.remove('active');
-  if (id === 's-app') {
-    appEl.classList.add('active');
-  } else {
-    const el = document.getElementById(id);
-    if (el) el.classList.add('active');
-  }
+  if (id === 's-app') { appEl.classList.add('active'); }
+  else { const el = document.getElementById(id); if (el) el.classList.add('active'); }
 }
 
-/* ════════════════════════════════════════════════════
-   INDEXED DB HELPERS
-════════════════════════════════════════════════════ */
 function openDB() {
   return new Promise((res, rej) => {
     const req = indexedDB.open(IDB_DB_NAME, 1);
@@ -471,9 +364,6 @@ async function idbSet(key, value) {
   });
 }
 
-/* ════════════════════════════════════════════════════
-   UUID
-════════════════════════════════════════════════════ */
 function generateUUID() {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
@@ -488,9 +378,6 @@ async function getOrCreateUUID() {
   return uuid;
 }
 
-/* ════════════════════════════════════════════════════
-   HMAC SIGNING
-════════════════════════════════════════════════════ */
 async function hmacSign(payload, secret) {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name:'HMAC', hash:'SHA-256' }, false, ['sign']);
@@ -498,9 +385,6 @@ async function hmacSign(payload, secret) {
   return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
 
-/* ════════════════════════════════════════════════════
-   VERIFY
-════════════════════════════════════════════════════ */
 async function verifyWithWorker(uuid) {
   const ts = Math.floor(Date.now() / 1000);
   const payload = `${uuid}:${ts}`;
@@ -516,9 +400,6 @@ async function verifyWithWorker(uuid) {
   return data;
 }
 
-/* ════════════════════════════════════════════════════
-   PWA DETECTION
-════════════════════════════════════════════════════ */
 function isRunningAsPWA() {
   return (
     window.matchMedia('(display-mode: standalone)').matches ||
@@ -528,9 +409,6 @@ function isRunningAsPWA() {
 }
 function isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent); }
 
-/* ════════════════════════════════════════════════════
-   BOOT
-════════════════════════════════════════════════════ */
 async function boot() {
   if (!isRunningAsPWA()) { showScreen('s-browser'); initInstallFlow(); return; }
   let uuid;
@@ -564,9 +442,8 @@ function showUUIDScreen(uuid) {
   document.getElementById('uuidDisplay').textContent = uuid;
   const copyBtn = document.getElementById('copyBtn');
   copyBtn.addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText(uuid);
-    } catch {
+    try { await navigator.clipboard.writeText(uuid); }
+    catch {
       const ta = document.createElement('textarea');
       ta.value = uuid; ta.style.cssText='position:fixed;opacity:0';
       document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
@@ -586,9 +463,6 @@ function showDenied(reason) {
   }
 }
 
-/* ════════════════════════════════════════════════════
-   INSTALL FLOW
-════════════════════════════════════════════════════ */
 let deferredPrompt = null;
 function initInstallFlow() {
   const btn = document.getElementById('installBtn');
@@ -614,9 +488,6 @@ function initInstallFlow() {
   },3000);
 }
 
-/* ════════════════════════════════════════════════════
-   APP ASSETS
-════════════════════════════════════════════════════ */
 const BALL = {
   1:'https://m.starmakerstudios.com/cdn/vue/agile-vue3/views/spa-rhapsody-music/web-sync/img/new/ball/ball1-a991f.png',
   2:'https://m.starmakerstudios.com/cdn/vue/agile-vue3/views/spa-rhapsody-music/web-sync/img/new/ball/ball2-f05ee.png',
@@ -639,9 +510,11 @@ let cdEl=null, countdown=5, lastRound=null;
 function buildUI(pred, stats, history, status) {
   const isPlay = pred.action === 'PLAY';
   const bonus  = pred.bonus_picks || null;
+  // skip_show_bonus_only: true when SKIP + bonus exists → hide main picks, show bonus only
+  const skipBonusOnly = pred.skip_show_bonus_only === true;
   const p1=pred.pred1, p2=pred.pred2, p3=pred.pred3||null;
   const c1=COLORS[p1]||'#fff', c2=COLORS[p2]||'#fff', c3=p3?(COLORS[p3]||'#fff'):null;
-  const has3   = isPlay && p3 != null;
+  const has3 = isPlay && p3 != null;
 
   const nr = status && status.next_reset_in;
   const roundHdr = `
@@ -650,56 +523,71 @@ function buildUI(pred, stats, history, status) {
       ${nr ? `<div class="reset-pill">Reset ${nr}</div>` : ''}
     </div>`;
 
+  let bannerSub = '';
+  if (isPlay) {
+    bannerSub = has3 ? 'Choose any planet below' : 'Choose either planet below';
+  } else {
+    bannerSub = pred.skip_reason || '';
+  }
+
   const abanner = `
     <div class="abanner ${isPlay?'play':'skip'}">
       <div class="aicon">${isPlay?'✅':'⏭'}</div>
       <div>
         <div>${isPlay?'PLAY THIS ROUND':'SKIP THIS ROUND'}</div>
-        <div class="asub">${isPlay ? (has3 ? 'Choose any planet below' : 'Choose either planet below') : (pred.skip_reason||'')}</div>
+        <div class="asub">${bannerSub}</div>
       </div>
     </div>`;
 
-  const sm = has3 ? 'sm' : '';
-  const orSm = has3 ? 'sm' : '';
-  const picks = `
-    <div class="picks">
-      <div class="ppick">
-        <div class="ppick-rank">Pick 1</div>
-        <div class="planet-wrap ${sm}">
-          <div class="gring ${sm}" style="border-color:${c1}"></div>
-          ${img(p1,`planet-img ${sm}`,`filter:drop-shadow(0 0 16px ${c1})`)}
+  // Main picks: hidden on SKIP when bonus exists
+  let picksHTML = '';
+  if (!skipBonusOnly) {
+    const sm = has3 ? 'sm' : '';
+    const orSm = has3 ? 'sm' : '';
+    picksHTML = `
+      <div class="picks">
+        <div class="ppick">
+          <div class="ppick-rank">Pick 1</div>
+          <div class="planet-wrap ${sm}">
+            <div class="gring ${sm}" style="border-color:${c1}"></div>
+            ${img(p1,`planet-img ${sm}`,`filter:drop-shadow(0 0 16px ${c1})`)}
+          </div>
+          <div class="pname ${sm}" style="color:${c1}">${NAMES[p1]||p1}</div>
+          <div class="pconf">${pred.pred1_conf||0}%</div>
         </div>
-        <div class="pname ${sm}" style="color:${c1}">${NAMES[p1]||p1}</div>
-        <div class="pconf">${pred.pred1_conf||0}%</div>
-      </div>
-      <div class="picks-or ${orSm}">OR</div>
-      <div class="ppick">
-        <div class="ppick-rank">Pick 2</div>
-        <div class="planet-wrap ${sm}">
-          <div class="gring rev ${sm}" style="border-color:${c2}"></div>
-          ${img(p2,`planet-img d1 ${sm}`,`filter:drop-shadow(0 0 16px ${c2})`)}
+        <div class="picks-or ${orSm}">OR</div>
+        <div class="ppick">
+          <div class="ppick-rank">Pick 2</div>
+          <div class="planet-wrap ${sm}">
+            <div class="gring rev ${sm}" style="border-color:${c2}"></div>
+            ${img(p2,`planet-img d1 ${sm}`,`filter:drop-shadow(0 0 16px ${c2})`)}
+          </div>
+          <div class="pname ${sm}" style="color:${c2}">${NAMES[p2]||p2}</div>
+          <div class="pconf">${pred.pred2_conf||0}%</div>
         </div>
-        <div class="pname ${sm}" style="color:${c2}">${NAMES[p2]||p2}</div>
-        <div class="pconf">${pred.pred2_conf||0}%</div>
-      </div>
-      ${has3 ? `
-      <div class="picks-or ${orSm}">OR</div>
-      <div class="ppick">
-        <div class="ppick-rank">Pick 3</div>
-        <div class="planet-wrap ${sm}">
-          <div class="gring ${sm}" style="border-color:${c3}"></div>
-          ${img(p3,`planet-img d2 ${sm}`,`filter:drop-shadow(0 0 16px ${c3})`)}
-        </div>
-        <div class="pname ${sm}" style="color:${c3}">${NAMES[p3]||p3}</div>
-        <div class="pconf">${pred.pred3_conf||0}%</div>
-      </div>` : ''}
-    </div>`;
+        ${has3 ? `
+        <div class="picks-or ${orSm}">OR</div>
+        <div class="ppick">
+          <div class="ppick-rank">Pick 3</div>
+          <div class="planet-wrap ${sm}">
+            <div class="gring ${sm}" style="border-color:${c3}"></div>
+            ${img(p3,`planet-img d2 ${sm}`,`filter:drop-shadow(0 0 16px ${c3})`)}
+          </div>
+          <div class="pname ${sm}" style="color:${c3}">${NAMES[p3]||p3}</div>
+          <div class="pconf">${pred.pred3_conf||0}%</div>
+        </div>` : ''}
+      </div>`;
+  }
 
+  // Bonus section: shown for PLAY normally, shown for SKIP when skipBonusOnly
   let bonusHTML = '';
-  if (isPlay && bonus && bonus.length) {
+  if (bonus && bonus.length && (isPlay || skipBonusOnly)) {
     const b1=bonus[0], b2=bonus[1]||null;
     const bc1=b1.color||COLORS[b1.idx]||'#ff9800';
     const bc2=b2?(b2.color||COLORS[b2.idx]||'#ff9800'):null;
+    const noteText = skipBonusOnly
+      ? '⚠ Round skipped — but high-mult EV signal detected. Small stake only.'
+      : '⚡ High-reward slot active — consider alongside main picks';
     bonusHTML = `
       <div class="bonus-sec">
         <div class="bonus-hdr">
@@ -720,7 +608,7 @@ function buildUI(pred, stats, history, status) {
             <div class="bconf">${b2.conf}%</div>
           </div>`:''}
         </div>
-        <div class="bnote">⚡ High-reward slot active — consider alongside main picks</div>
+        <div class="${skipBonusOnly ? 'bnote-skip' : 'bnote'}">${noteText}</div>
       </div>`;
   }
 
@@ -816,7 +704,7 @@ function buildUI(pred, stats, history, status) {
   document.getElementById('app').innerHTML=`
     ${err}
     <div class="arena">
-      ${roundHdr}${abanner}${picks}${bonusHTML}${entropy}
+      ${roundHdr}${abanner}${picksHTML}${bonusHTML}${entropy}
     </div>
     ${hist?`<div class="card"><div class="ctitle">Recent History</div><div class="hstrip">${hist}</div></div>`:''}
     <div class="card"><div class="ctitle">Score Breakdown</div>${scores}</div>
@@ -874,9 +762,6 @@ function launchApp() {
   },1000);
 }
 
-/* ════════════════════════════════════════════════════
-   SERVICE WORKER
-════════════════════════════════════════════════════ */
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/pwa/sw.js', { scope: '/' }).catch(console.warn);
 }
