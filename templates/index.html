@@ -169,24 +169,19 @@ body{
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
   filter:drop-shadow(0 2px 14px rgba(255,200,0,0.55));margin-bottom:8px;
 }
-/* Single status pill — no round, no sub-line */
-.hdr-pill{
-  display:inline-flex;align-items:center;gap:6px;
-  background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.16);
-  border-radius:30px;padding:5px 14px;
-  font-size:12px;font-weight:700;color:var(--muted);letter-spacing:1px;
-}
-.ldot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 9px var(--green);animation:blink 1.6s infinite;}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
 
-.auto-bar{
-  width:100%;display:flex;align-items:center;justify-content:center;gap:8px;
-  margin-bottom:10px;padding:8px 14px;
-  background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.08);
-  border-radius:12px;font-size:12px;font-weight:700;color:var(--muted);letter-spacing:0.5px;
+/* ── COMBINED status + refresh pill ── */
+.hdr-pill{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.16);
+  border-radius:30px;padding:6px 16px;
+  font-size:12px;font-weight:700;color:var(--muted);letter-spacing:0.5px;
 }
-.auto-bar .cdot{width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 7px var(--cyan);animation:blink 1.6s infinite;flex-shrink:0;}
-.auto-bar .cd{background:rgba(0,0,0,0.3);border-radius:20px;padding:2px 10px;font-size:12px;color:rgba(255,255,255,0.45);font-family:'Share Tech Mono',monospace;}
+.ldot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 9px var(--green);animation:blink 1.6s infinite;flex-shrink:0;}
+.cdot{width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 7px var(--cyan);animation:blink 1.6s infinite;flex-shrink:0;}
+.pill-divider{width:1px;height:12px;background:rgba(255,255,255,0.18);flex-shrink:0;}
+.pill-cd{background:rgba(0,0,0,0.3);border-radius:20px;padding:2px 8px;font-size:11px;color:rgba(255,255,255,0.45);font-family:'Share Tech Mono',monospace;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
 
 /* ════════════════════════════════
    GLASS CARD
@@ -207,7 +202,7 @@ body{
 }
 .arena::before{content:'';position:absolute;inset:0;border-radius:22px;background:radial-gradient(ellipse 80% 55% at 50% 0%,rgba(150,70,255,0.09) 0%,transparent 65%);pointer-events:none;}
 
-/* Round number row — no "Latest" sub-line */
+/* Round number row */
 .rrow{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
 .rnum{font-family:'Lilita One',cursive;font-size:22px;color:var(--gold);text-shadow:0 0 18px rgba(255,215,0,0.5);}
 .reset-pill{font-size:10px;color:var(--muted);font-family:'Share Tech Mono',monospace;background:rgba(0,0,0,0.35);border-radius:10px;padding:3px 9px;border:1px solid rgba(255,255,255,0.1);}
@@ -218,7 +213,7 @@ body{
 .aicon{font-size:24px;flex-shrink:0;line-height:1;}
 .asub{font-family:'Nunito',sans-serif;font-size:12px;font-weight:600;opacity:0.6;margin-top:2px;}
 
-/* ── PICKS — supports 2 or 3 picks ── */
+/* ── PICKS ── */
 .picks{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:18px;flex-wrap:nowrap;}
 .ppick{display:flex;flex-direction:column;align-items:center;gap:7px;flex:1;min-width:0;}
 .ppick-rank{font-size:9px;font-weight:800;color:var(--muted);letter-spacing:2px;text-transform:uppercase;}
@@ -280,7 +275,7 @@ body{
 .srow.sbonus .spct{color:var(--orange);}
 
 /* ════════════════════════════════
-   LIVE RESULTS STATS (replaces sim stats)
+   LIVE RESULTS STATS
 ════════════════════════════════ */
 .sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;}
 .sbox{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:12px 6px;text-align:center;}
@@ -401,16 +396,14 @@ body{
   <div id="wrap">
     <div class="hdr">
       <div class="hdr-title">✨ TREASURE AI ✨</div>
-      <!-- Single status line only — no round, no sub-text -->
+      <!-- COMBINED: Live status + auto-refresh countdown in one single pill -->
       <div class="hdr-pill">
         <span class="ldot"></span>
         <span id="statusText">Connecting...</span>
+        <span class="pill-divider"></span>
+        <span class="cdot"></span>
+        <span style="font-size:11px;color:var(--muted);">Refresh in <span class="pill-cd"><span id="cdNum">5</span>s</span></span>
       </div>
-    </div>
-    <div class="auto-bar">
-      <span class="cdot"></span>
-      Auto-refreshing in
-      <span class="cd"><span id="cdNum">5</span>s</span>
     </div>
     <div id="app">
       <div class="loading">
@@ -650,7 +643,6 @@ function buildUI(pred, stats, history, status) {
   const c1=COLORS[p1]||'#fff', c2=COLORS[p2]||'#fff', c3=p3?(COLORS[p3]||'#fff'):null;
   const has3   = isPlay && p3 != null;
 
-  // ── Round row (no "Latest" sub-line) ──
   const nr = status && status.next_reset_in;
   const roundHdr = `
     <div class="rrow">
@@ -658,7 +650,6 @@ function buildUI(pred, stats, history, status) {
       ${nr ? `<div class="reset-pill">Reset ${nr}</div>` : ''}
     </div>`;
 
-  // ── Action banner ──
   const abanner = `
     <div class="abanner ${isPlay?'play':'skip'}">
       <div class="aicon">${isPlay?'✅':'⏭'}</div>
@@ -668,7 +659,6 @@ function buildUI(pred, stats, history, status) {
       </div>
     </div>`;
 
-  // ── Picks — 2 or 3 planets ──
   const sm = has3 ? 'sm' : '';
   const orSm = has3 ? 'sm' : '';
   const picks = `
@@ -705,7 +695,6 @@ function buildUI(pred, stats, history, status) {
       </div>` : ''}
     </div>`;
 
-  // ── Bonus picks ──
   let bonusHTML = '';
   if (isPlay && bonus && bonus.length) {
     const b1=bonus[0], b2=bonus[1]||null;
@@ -735,7 +724,6 @@ function buildUI(pred, stats, history, status) {
       </div>`;
   }
 
-  // ── Entropy ──
   const ep  = Math.min(100,(pred.entropy/3)*100);
   const ec  = pred.entropy<2?'#00e676':pred.entropy<2.7?'#facc15':'#ff4444';
   const tp  = (2.7/3)*100;
@@ -753,7 +741,6 @@ function buildUI(pred, stats, history, status) {
       <div class="last10"><span class="l10lbl">LAST 10 ›</span>${l10}</div>
     </div>`;
 
-  // ── Score breakdown ──
   const p3set = p3 ? new Set([p3]) : new Set();
   const bset  = new Set((bonus||[]).map(b=>b.idx));
   const scores = Object.entries(pred.all_scores||{})
@@ -778,7 +765,6 @@ function buildUI(pred, stats, history, status) {
       </div>`;
     }).join('');
 
-  // ── Recent history strip ──
   const hist=(history||[]).map(h=>{
     return `<div class="hitem">
       ${img(h.reward_index,'himg','')}
@@ -787,14 +773,12 @@ function buildUI(pred, stats, history, status) {
     </div>`;
   }).join('');
 
-  // ── Live results (replaces sim stats) ──
   const le=(stats.live_log||[]).slice().reverse();
   const lh=le.filter(r=>r.hit).length, lm=le.length-lh;
   const la=le.length?(lh/le.length*100).toFixed(1):null;
   let cl=0,ct='';
   for(const r of le){if(!cl){ct=r.hit?'W':'L';cl=1;}else if((r.hit&&ct==='W')||(!r.hit&&ct==='L'))cl++;else break;}
 
-  // Live stats grid (replaces simulation stats)
   const liveStats = le.length ? `
     <div class="sgrid">
       <div class="sbox"><div class="sval g">${lh}</div><div class="slbl">Hits</div></div>
@@ -805,19 +789,13 @@ function buildUI(pred, stats, history, status) {
       <div class="sbox"><div class="sval">${cl>1?`${cl}${ct}`:'—'}</div><div class="slbl">Streak</div></div>
     </div>` : `<div style="text-align:center;padding:18px;color:var(--muted);font-size:13px;">No live results yet</div>`;
 
-  // Live log rows (show pred3 if exists)
   const lrows=le.map(r=>{
     const rowTop3 = r.top3 || r.top2;
-    let ph = rowTop3.map((b,i) => {
-      const cls = i >= 2 ? 'rball p3ball' : 'rball';
-      return `<div class="${cls}">${img(b,'','width:22px;height:22px;object-fit:contain')}</div>`;
-    }).join('');
-    // join preds with separators
     const predBalls = rowTop3.map((b,i) => {
       const cls = i >= 2 ? 'rball p3ball' : 'rball';
       return `<div class="${cls}">${img(b,'','width:22px;height:22px;object-fit:contain')}</div>`;
     });
-    ph = predBalls.join('');
+    let ph = predBalls.join('');
     if(r.bonus_picks&&r.bonus_picks.length){
       ph+=`<span class="rsep">+</span>`;
       r.bonus_picks.forEach(b=>{ph+=`<div class="rball bball">${img(b,'','width:22px;height:22px;object-fit:contain')}</div>`;});
@@ -868,7 +846,6 @@ function buildUI(pred, stats, history, status) {
 
 async function refreshAll(){
   try{
-    // Status text: just "Live" — no round number
     document.getElementById('statusText').textContent='Refreshing...';
     const [pR,sR,hR,stR]=await Promise.all([
       fetch('/api/predict'),fetch('/api/stats'),
@@ -879,11 +856,10 @@ async function refreshAll(){
       pR.json(),sR.json(),hR.json(),stR.ok?stR.json():{},
     ]);
     buildUI(pred,stats,history,status);
-    // Single status: just "Live" with dot
     document.getElementById('statusText').textContent='Live';
     countdown=5;
   }catch(e){
-    document.getElementById('statusText').textContent='Connection Error';
+    document.getElementById('statusText').textContent='Error';
     console.error(e);
   }
 }
