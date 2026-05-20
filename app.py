@@ -622,8 +622,13 @@ def get_bonus_picks(scores, top2):
     if not qualifying:
         return None
 
-    bonus = [cls for cls, _ in ranked
-             if cls in qualifying and cls not in top2]
+    # NEW — sort qualifying classes by EV score (prob * multiplier) descending
+    ev_ranked = sorted(
+        qualifying,
+        key=lambda cls: sc_map.get(cls, 0.0) * HIGH_MULT_EV.get(cls, 1),
+        reverse=True
+    )
+    bonus = [cls for cls in ev_ranked if cls not in top2]
 
     if not bonus:
         return None
