@@ -9,7 +9,7 @@ app = Flask(__name__)
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 DATA_FILE              = "round_data.json"
 SKIP_TOP1_THRESHOLD    = 0.220
-SKIP_ENTROPY_THRESHOLD = 2.85       # raised: 2.70 → 2.80
+SKIP_ENTROPY_THRESHOLD = 2.825       # raised: 2.70 → 2.80
 BRAKE_TRIGGER          = 3
 BRAKE_PAUSE            = 3
 POLL_INTERVAL          = 5
