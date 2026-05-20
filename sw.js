@@ -1,5 +1,5 @@
 // sw.js — Treasure AI Service Worker
-const CACHE = "treasure-ai-v4";
+const CACHE = "treasure-ai-v5";
 const STATIC = ["/"];
 
 self.addEventListener("install", e => {
