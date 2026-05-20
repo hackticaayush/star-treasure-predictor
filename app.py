@@ -36,6 +36,35 @@ FETCH_HEADERS = {
     'Cookie':     "PHPSESSID=pd6mapbqfhbk3e7argj51uh1ts; oauth_token=94le54aFnKy5CrbNzo7s903FOWniysVT"
 }
 
+# ── PATTERN DETECTION CONFIG ──────────────────────────────────────────────────
+# Base weights for distance-decay scoring
+PATTERN_BASE_WEIGHTS = {
+    7: 3.0,   # 50x
+    3: 2.0,   # 25x
+    4: 1.5,   # 15x
+    2: 1.0,   # 10x
+    1: 1.0,   # Purple
+    5: 1.0,   # Yellow
+    6: 1.0,   # Lt. Green
+    8: 1.0,   # Dk. Green
+}
+
+# 5 pattern groups
+PATTERN_GROUPS = {
+    "high_mult": {"classes": {2, 3, 4, 7}, "default_threshold": 5.0},
+    "cls1":      {"classes": {1},           "default_threshold": 4.0},
+    "cls5":      {"classes": {5},           "default_threshold": 4.0},
+    "cls6":      {"classes": {6},           "default_threshold": 4.0},
+    "cls8":      {"classes": {8},           "default_threshold": 4.0},
+}
+
+PATTERN_LOOKBACK     = 10          # look at last 10 rounds
+PATTERN_DECAY        = 0.5         # 50% decay per distance step
+PATTERN_HIT_BUFFER   = 100         # rolling buffer of last 100 hits per group
+PATTERN_BOOST_MIN    = 0.15        # minimum boost when threshold exceeded
+PATTERN_BOOST_MAX    = 0.35        # maximum boost cap
+PATTERN_BOOST_SCALE  = 0.04        # how fast boost grows above threshold
+
 # ── GLOBAL STATE ──────────────────────────────────────────────────────────────
 _lock              = threading.Lock()
 _rewards           = []
@@ -54,6 +83,14 @@ _fetch_status = {
     "last_error":   None, "total_fetched": 0,
     "status": "starting", "last_reset": None,
 }
+
+# ── PATTERN STATE (new) ───────────────────────────────────────────────────────
+# Rolling buffer of pattern scores at time of confirmed HIT, per group
+_hit_pattern_scores = {g: [] for g in PATTERN_GROUPS}
+# Dynamic threshold per group (starts at default, learned from hits)
+_dynamic_threshold  = {g: PATTERN_GROUPS[g]["default_threshold"] for g in PATTERN_GROUPS}
+# Last computed pattern scores (for logging / API)
+_last_pattern_info  = {}
 
 # ── DAILY RESET ───────────────────────────────────────────────────────────────
 def _should_reset():
@@ -77,6 +114,11 @@ def _do_reset():
         _cached_pred  = None
         _fetch_status["last_reset"] = now_ist.strftime("%d %b %Y %H:%M IST")
         _fetch_status["status"]     = "reset_done"
+        # Reset pattern state
+        for g in PATTERN_GROUPS:
+            _hit_pattern_scores[g].clear()
+            _dynamic_threshold[g] = PATTERN_GROUPS[g]["default_threshold"]
+        _last_pattern_info.clear()
     _last_reset_date = now_ist.date()
     print("[Reset] All data cleared.")
 
@@ -163,11 +205,101 @@ def build_global_stats(rw):
     avg_run={k:sum(v)/len(v) for k,v in rl.items()}
     return prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,avg_gap,avg_run
 
+# ── PATTERN DETECTOR (new) ────────────────────────────────────────────────────
+def compute_pattern_scores(rewards):
+    """
+    For each of the 5 pattern groups, compute a distance-decayed score
+    over the last PATTERN_LOOKBACK rounds.
+
+    contribution = base_weight × (PATTERN_DECAY ^ (distance - 1))
+    distance 1 = most recent round
+
+    Returns dict: {group_name: score}
+    """
+    if len(rewards) < PATTERN_LOOKBACK:
+        return {g: 0.0 for g in PATTERN_GROUPS}
+
+    last10 = rewards[-PATTERN_LOOKBACK:]  # oldest → newest
+    scores = {g: 0.0 for g in PATTERN_GROUPS}
+
+    for dist_from_end, cls in enumerate(reversed(last10)):
+        distance = dist_from_end + 1  # 1 = most recent
+        decay    = PATTERN_DECAY ** (distance - 1)
+        weight   = PATTERN_BASE_WEIGHTS.get(cls, 1.0)
+        contrib  = weight * decay
+
+        for group_name, group_cfg in PATTERN_GROUPS.items():
+            if cls in group_cfg["classes"]:
+                scores[group_name] += contrib
+
+    return scores
+
+
+def apply_pattern_boost(scores_dict, pattern_scores, dyn_thresholds):
+    """
+    For each pattern group, if pattern_score >= dynamic_threshold,
+    boost the classes in that group proportionally, then renormalize.
+
+    scores_dict: {cls_int: float}  — already normalized to sum=1
+    Returns: (boosted_scores, pattern_info)
+    """
+    boosted = dict(scores_dict)
+    pattern_info = {}
+
+    for group_name, group_cfg in PATTERN_GROUPS.items():
+        pscore    = pattern_scores.get(group_name, 0.0)
+        threshold = dyn_thresholds.get(group_name, group_cfg["default_threshold"])
+        triggered = pscore >= threshold
+
+        boost_applied = 0.0
+        if triggered:
+            excess        = pscore - threshold
+            boost_applied = min(PATTERN_BOOST_MAX,
+                                PATTERN_BOOST_MIN + excess * PATTERN_BOOST_SCALE)
+            for cls in group_cfg["classes"]:
+                if cls in boosted:
+                    boosted[cls] += boosted[cls] * boost_applied
+                else:
+                    boosted[cls] = boost_applied * 0.01  # tiny seed if absent
+
+        pattern_info[group_name] = {
+            "score":         round(pscore, 4),
+            "threshold":     round(threshold, 4),
+            "triggered":     triggered,
+            "boost_applied": round(boost_applied, 4),
+        }
+
+    # Renormalize to sum = 1
+    total = sum(boosted.values()) or 1.0
+    boosted = {k: v / total for k, v in boosted.items()}
+
+    return boosted, pattern_info
+
+
+def update_pattern_hit(group_name, pattern_score):
+    """
+    Called when a prediction HIT is confirmed.
+    Adds the pattern_score to the rolling buffer and updates dynamic threshold.
+    """
+    buf = _hit_pattern_scores[group_name]
+    buf.append(pattern_score)
+    if len(buf) > PATTERN_HIT_BUFFER:
+        buf.pop(0)
+    if buf:
+        _dynamic_threshold[group_name] = sum(buf) / len(buf)
+    print(f"[Pattern] Group '{group_name}' hit recorded. "
+          f"score={pattern_score:.4f} "
+          f"new_threshold={_dynamic_threshold[group_name]:.4f} "
+          f"(buffer={len(buf)})")
+
+
+# ── SCORE ROUND (updated) ─────────────────────────────────────────────────────
 def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar):
     n=len(h)
     if n<4:
         ranked=sorted(prob.items(),key=lambda x:-x[1])
         return [ranked[0][0],ranked[1][0]],{k:1/8 for k in range(1,9)},3.0,0.125,0.125
+
     l1,l2,l3,l4=h[-1],h[-2],h[-3],h[-4]
     k1=(l1,);k2=(l2,l1);k3=(l3,l2,l1);k4=(l4,l3,l2,l1)
     def rel(t,key): return min(1.0,sum(t[key].values())/30) if key in t else 0
@@ -209,6 +341,20 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar):
         sc[idx]=max(0.0,raw/tw-rpen)
     ts=sum(sc.values()) or 1
     sc={k:v/ts for k,v in sc.items()}
+
+    # ── PATTERN BOOST (new) ──────────────────────────────────────────────────
+    with _lock:
+        dyn_thresh = dict(_dynamic_threshold)
+
+    pattern_scores = compute_pattern_scores(h)
+    sc, pattern_info = apply_pattern_boost(sc, pattern_scores, dyn_thresh)
+
+    with _lock:
+        _last_pattern_info.clear()
+        _last_pattern_info.update(pattern_info)
+        _last_pattern_info["raw_scores"] = {g: round(v, 4) for g, v in pattern_scores.items()}
+    # ────────────────────────────────────────────────────────────────────────
+
     rk=sorted(sc.items(),key=lambda x:-x[1])
     ent=-sum(v*math.log2(v) for v in sc.values() if v>0)
     return [rk[0][0],rk[1][0]],sc,ent,rk[0][1],rk[1][1]
@@ -295,26 +441,47 @@ def _build_cached_pred(rewards, raw_rounds, brake):
             for b in bonus_picks
         ]
 
+    # Snapshot pattern info for API
+    with _lock:
+        pattern_snap = dict(_last_pattern_info)
+        dyn_thresh_snap = dict(_dynamic_threshold)
+
+    pattern_summary = {}
+    for g, info in pattern_snap.items():
+        if g == "raw_scores":
+            continue
+        if isinstance(info, dict):
+            pattern_summary[g] = {
+                "score":         info.get("score", 0.0),
+                "threshold":     info.get("threshold", 0.0),
+                "triggered":     info.get("triggered", False),
+                "boost_applied": info.get("boost_applied", 0.0),
+            }
+
     return {
-        "next_round":   next_round,  "latest_round": last_round,
-        "pred1":        top2[0],     "pred2":        top2[1],
-        "pred1_name":   CLASS_NAMES.get(top2[0],"?"),
-        "pred2_name":   CLASS_NAMES.get(top2[1],"?"),
-        "pred1_color":  CLASS_COLORS.get(top2[0],"#888"),
-        "pred2_color":  CLASS_COLORS.get(top2[1],"#888"),
-        "pred1_conf":   round(t1s*100,2),
-        "pred2_conf":   round(t2s*100,2),
-        "entropy":      round(ent,4),
-        "action":       "PLAY" if play else "SKIP",
-        "skip_reason":  skip_reason,
-        "bonus_picks":  bonus_details,
-        "all_scores":   {k: round(v*100,2) for k,v in scores.items()},
-        "last_10":      rewards[-10:],
-        "total_rounds": len(rewards),
-        "_play":        play,
-        "_top2":        list(top2),
-        "_bonus_picks": list(bonus_picks) if bonus_picks else None,
-        "_next_round":  next_round,
+        "next_round":        next_round,  "latest_round": last_round,
+        "pred1":             top2[0],     "pred2":        top2[1],
+        "pred1_name":        CLASS_NAMES.get(top2[0],"?"),
+        "pred2_name":        CLASS_NAMES.get(top2[1],"?"),
+        "pred1_color":       CLASS_COLORS.get(top2[0],"#888"),
+        "pred2_color":       CLASS_COLORS.get(top2[1],"#888"),
+        "pred1_conf":        round(t1s*100,2),
+        "pred2_conf":        round(t2s*100,2),
+        "entropy":           round(ent,4),
+        "action":            "PLAY" if play else "SKIP",
+        "skip_reason":       skip_reason,
+        "bonus_picks":       bonus_details,
+        "all_scores":        {k: round(v*100,2) for k,v in scores.items()},
+        "last_10":           rewards[-10:],
+        "total_rounds":      len(rewards),
+        "pattern_info":      pattern_summary,
+        "dynamic_thresholds": {g: round(v, 4) for g, v in dyn_thresh_snap.items()},
+        "_play":             play,
+        "_top2":             list(top2),
+        "_bonus_picks":      list(bonus_picks) if bonus_picks else None,
+        "_next_round":       next_round,
+        "_pattern_scores":   {g: pattern_snap.get(g, {}).get("score", 0.0)
+                              for g in PATTERN_GROUPS},
     }
 
 # ── FETCHER LOOP ──────────────────────────────────────────────────────────────
@@ -355,11 +522,18 @@ def fetcher_loop():
                     pred_round = pending["round"]
                     actual_rec = next((r for r in records if r["round"] == pred_round), None)
                     if actual_rec is not None:
-                        actual_val = actual_rec["reward_index"]
-                        all_preds  = list(pending["top2"])
+                        actual_val    = actual_rec["reward_index"]
+                        all_preds     = list(pending["top2"])
                         if pending.get("bonus_picks"):
                             all_preds += [p for p in pending["bonus_picks"] if p not in all_preds]
-                        hit   = actual_val in all_preds
+                        hit = actual_val in all_preds
+
+                        # ── UPDATE PATTERN THRESHOLDS ON HIT (new) ──────────
+                        if hit and pending.get("pattern_scores"):
+                            for group_name, pscore in pending["pattern_scores"].items():
+                                update_pattern_hit(group_name, pscore)
+                        # ────────────────────────────────────────────────────
+
                         entry = {
                             "round": pred_round, "top2": pending["top2"],
                             "bonus_picks": pending.get("bonus_picks"),
@@ -402,12 +576,17 @@ def fetcher_loop():
                     with _lock:
                         cur_p = _pending_pred
                     if cur_p is None or cur_p["round"] != nr:
-                        np_ = {"round": nr, "top2": cached["_top2"],
-                               "bonus_picks": cached["_bonus_picks"]}
+                        np_ = {
+                            "round":          nr,
+                            "top2":           cached["_top2"],
+                            "bonus_picks":    cached["_bonus_picks"],
+                            "pattern_scores": cached.get("_pattern_scores", {}),
+                        }
                         with _lock:
                             _pending_pred = np_
                         print(f"[Fetcher] Pending → #{nr} top2={cached['_top2']} "
-                              f"bonus={cached['_bonus_picks']}")
+                              f"bonus={cached['_bonus_picks']} "
+                              f"pattern_scores={cached.get('_pattern_scores',{})}")
 
                 with _lock:
                     lr = _raw_rounds[-1]["round"] if _raw_rounds else "?"
@@ -422,8 +601,7 @@ def fetcher_loop():
         time.sleep(POLL_INTERVAL)
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  PWA ROUTES — sw.js aur manifest.json serve karne ke liye
-#  sw.js aur manifest.json file project root mein honi chahiye (app.py ke saath)
+#  PWA ROUTES
 # ══════════════════════════════════════════════════════════════════════════════
 
 @app.route("/pwa/sw.js")
@@ -469,15 +647,19 @@ def api_predict():
 @app.route("/api/stats")
 def api_stats():
     with _lock:
-        stats = dict(_sim_stats)
-        live  = list(_live_log)
+        stats     = dict(_sim_stats)
+        live      = list(_live_log)
+        dyn_t     = dict(_dynamic_threshold)
+        hit_bufs  = {g: len(v) for g, v in _hit_pattern_scores.items()}
     cur = 0; mx_live = 0
     for e in reversed(live):
         if not e["hit"]: cur += 1; mx_live = max(mx_live, cur)
         else: break
-    stats["live_log"]        = live
-    stats["live_cur_streak"] = cur
-    stats["live_max_loss"]   = mx_live
+    stats["live_log"]            = live
+    stats["live_cur_streak"]     = cur
+    stats["live_max_loss"]       = mx_live
+    stats["dynamic_thresholds"]  = {g: round(v, 4) for g, v in dyn_t.items()}
+    stats["pattern_hit_counts"]  = hit_bufs
     return jsonify(stats)
 
 @app.route("/api/status")
@@ -509,6 +691,28 @@ def api_history():
         "name":  CLASS_NAMES.get(r["reward_index"],"?"),
         "color": CLASS_COLORS.get(r["reward_index"],"#888"),
     } for r in reversed(raw)])
+
+@app.route("/api/pattern")
+def api_pattern():
+    """New endpoint — live pattern scores and dynamic thresholds."""
+    with _lock:
+        pattern_info = dict(_last_pattern_info)
+        dyn_t        = dict(_dynamic_threshold)
+        hit_bufs     = {g: list(v) for g, v in _hit_pattern_scores.items()}
+    result = {}
+    for g in PATTERN_GROUPS:
+        info = pattern_info.get(g, {})
+        buf  = hit_bufs.get(g, [])
+        result[g] = {
+            "score":          info.get("score", 0.0) if isinstance(info, dict) else 0.0,
+            "threshold":      round(dyn_t.get(g, PATTERN_GROUPS[g]["default_threshold"]), 4),
+            "triggered":      info.get("triggered", False) if isinstance(info, dict) else False,
+            "boost_applied":  info.get("boost_applied", 0.0) if isinstance(info, dict) else 0.0,
+            "hit_buffer_len": len(buf),
+            "hit_avg":        round(sum(buf)/len(buf), 4) if buf else None,
+            "classes":        list(PATTERN_GROUPS[g]["classes"]),
+        }
+    return jsonify(result)
 
 # ── STARTUP ───────────────────────────────────────────────────────────────────
 def startup():
@@ -546,9 +750,10 @@ def startup():
 
         if cached and cached["_play"] and cached["_next_round"] is not None:
             _pending_pred = {
-                "round":       cached["_next_round"],
-                "top2":        cached["_top2"],
-                "bonus_picks": cached["_bonus_picks"],
+                "round":          cached["_next_round"],
+                "top2":           cached["_top2"],
+                "bonus_picks":    cached["_bonus_picks"],
+                "pattern_scores": cached.get("_pattern_scores", {}),
             }
             print(f"[Startup] Pending → #{_pending_pred['round']} top2={_pending_pred['top2']}")
 
