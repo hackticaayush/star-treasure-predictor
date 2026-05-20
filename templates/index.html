@@ -54,7 +54,7 @@ body{
 }
 
 /* ════════════════════════════════════════════
-   SCREEN SYSTEM — only one visible at a time
+   SCREEN SYSTEM
 ════════════════════════════════════════════ */
 .screen{
   position:fixed;inset:0;z-index:10;
@@ -67,175 +67,78 @@ body{
 .screen.active{opacity:1;pointer-events:all;}
 
 /* ════════════════════════════════════════════
-   SCREEN 1 — BROWSER GATE (not installed)
+   SCREEN 1 — BROWSER GATE
 ════════════════════════════════════════════ */
 #s-browser {
   text-align:center;
   background:rgba(4,2,22,0.92);
   backdrop-filter:blur(30px);
 }
-
 .gate-logo{
-  font-family:'Lilita One',cursive;
-  font-size:36px;letter-spacing:2px;
+  font-family:'Lilita One',cursive;font-size:36px;letter-spacing:2px;
   background:linear-gradient(180deg,#fff 0%,#ffd700 50%,#ff9800 100%);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
-  filter:drop-shadow(0 2px 18px rgba(255,200,0,0.5));
-  margin-bottom:6px;
+  filter:drop-shadow(0 2px 18px rgba(255,200,0,0.5));margin-bottom:6px;
 }
 .gate-sub{font-size:13px;color:var(--muted);font-weight:700;letter-spacing:1px;margin-bottom:40px;}
-
 .gate-card{
-  background:rgba(255,255,255,0.04);
-  border:1px solid rgba(255,255,255,0.1);
-  border-radius:22px;
-  padding:28px 24px;
-  width:100%;max-width:360px;
-  margin-bottom:20px;
+  background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);
+  border-radius:22px;padding:28px 24px;width:100%;max-width:360px;margin-bottom:20px;
 }
 .gate-icon{font-size:52px;margin-bottom:16px;}
-.gate-title{
-  font-family:'Lilita One',cursive;
-  font-size:22px;color:var(--gold);
-  margin-bottom:10px;
-}
+.gate-title{font-family:'Lilita One',cursive;font-size:22px;color:var(--gold);margin-bottom:10px;}
 .gate-desc{font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:24px;}
-
 .install-btn{
   display:flex;align-items:center;justify-content:center;gap:10px;
   width:100%;padding:15px;border-radius:14px;border:none;cursor:pointer;
   font-family:'Lilita One',cursive;font-size:18px;letter-spacing:1px;
-  background:linear-gradient(135deg,#ffd700,#ff9800);
-  color:#07052a;
-  box-shadow:0 4px 30px rgba(255,215,0,0.3);
-  transition:transform .15s,box-shadow .15s;
+  background:linear-gradient(135deg,#ffd700,#ff9800);color:#07052a;
+  box-shadow:0 4px 30px rgba(255,215,0,0.3);transition:transform .15s,box-shadow .15s;
 }
 .install-btn:active{transform:scale(0.97);}
-.install-btn:disabled{
-  background:rgba(255,255,255,0.1);color:var(--muted);
-  box-shadow:none;cursor:default;
-}
-
-.gate-steps{
-  width:100%;max-width:360px;
-  text-align:left;
-}
-.gate-steps-title{
-  font-size:11px;font-weight:800;color:rgba(255,255,255,0.3);
-  letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;text-align:center;
-}
-.step{
-  display:flex;align-items:flex-start;gap:10px;
-  margin-bottom:10px;font-size:13px;color:var(--muted);line-height:1.5;
-}
-.step-n{
-  width:22px;height:22px;border-radius:50%;flex-shrink:0;
-  background:rgba(255,215,0,0.12);border:1px solid rgba(255,215,0,0.3);
-  display:flex;align-items:center;justify-content:center;
-  font-size:11px;font-weight:800;color:var(--gold);margin-top:1px;
-}
+.install-btn:disabled{background:rgba(255,255,255,0.1);color:var(--muted);box-shadow:none;cursor:default;}
+.gate-steps{width:100%;max-width:360px;text-align:left;}
+.gate-steps-title{font-size:11px;font-weight:800;color:rgba(255,255,255,0.3);letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;text-align:center;}
+.step{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;font-size:13px;color:var(--muted);line-height:1.5;}
+.step-n{width:22px;height:22px;border-radius:50%;flex-shrink:0;background:rgba(255,215,0,0.12);border:1px solid rgba(255,215,0,0.3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--gold);margin-top:1px;}
 .ios-steps{display:none;}
 
 /* ════════════════════════════════════════════
-   SCREEN 2 — UUID REVEAL (first launch in PWA)
+   SCREEN 2 — UUID REVEAL
 ════════════════════════════════════════════ */
 #s-uuid{background:rgba(4,2,22,0.92);backdrop-filter:blur(30px);text-align:center;}
-
-.uuid-logo{
-  font-family:'Lilita One',cursive;font-size:30px;
-  background:linear-gradient(180deg,#fff 0%,#ffd700 50%,#ff9800 100%);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
-  margin-bottom:4px;
-}
-.uuid-badge{
-  display:inline-block;
-  background:rgba(0,229,255,0.1);border:1px solid rgba(0,229,255,0.3);
-  border-radius:20px;padding:4px 14px;
-  font-size:11px;font-weight:800;color:var(--cyan);letter-spacing:2px;
-  margin-bottom:32px;
-}
-
-.uuid-card{
-  background:rgba(255,255,255,0.04);
-  border:1px solid rgba(255,255,255,0.1);
-  border-radius:22px;padding:28px 22px;
-  width:100%;max-width:380px;margin-bottom:20px;
-}
-.uuid-card-title{
-  font-family:'Lilita One',cursive;font-size:17px;color:var(--gold);
-  margin-bottom:6px;
-}
-.uuid-card-desc{
-  font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:22px;
-}
-
-.uuid-box{
-  background:rgba(0,0,0,0.4);
-  border:1.5px solid rgba(255,215,0,0.3);
-  border-radius:14px;padding:16px 14px;
-  margin-bottom:14px;position:relative;
-}
-.uuid-label{
-  font-size:10px;font-weight:800;color:rgba(255,215,0,0.5);
-  letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;
-}
-.uuid-val{
-  font-family:'Share Tech Mono',monospace;
-  font-size:13px;color:#fff;
-  word-break:break-all;line-height:1.6;
-  letter-spacing:0.5px;
-}
-
-.copy-btn{
-  display:flex;align-items:center;justify-content:center;gap:8px;
-  width:100%;padding:12px;border-radius:12px;
-  border:1.5px solid rgba(255,215,0,0.35);
-  background:rgba(255,215,0,0.06);
-  color:var(--gold);font-family:'Lilita One',cursive;font-size:15px;
-  cursor:pointer;transition:all .15s;margin-bottom:10px;
-}
+.uuid-logo{font-family:'Lilita One',cursive;font-size:30px;background:linear-gradient(180deg,#fff 0%,#ffd700 50%,#ff9800 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:4px;}
+.uuid-badge{display:inline-block;background:rgba(0,229,255,0.1);border:1px solid rgba(0,229,255,0.3);border-radius:20px;padding:4px 14px;font-size:11px;font-weight:800;color:var(--cyan);letter-spacing:2px;margin-bottom:32px;}
+.uuid-card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:22px;padding:28px 22px;width:100%;max-width:380px;margin-bottom:20px;}
+.uuid-card-title{font-family:'Lilita One',cursive;font-size:17px;color:var(--gold);margin-bottom:6px;}
+.uuid-card-desc{font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:22px;}
+.uuid-box{background:rgba(0,0,0,0.4);border:1.5px solid rgba(255,215,0,0.3);border-radius:14px;padding:16px 14px;margin-bottom:14px;position:relative;}
+.uuid-label{font-size:10px;font-weight:800;color:rgba(255,215,0,0.5);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;}
+.uuid-val{font-family:'Share Tech Mono',monospace;font-size:13px;color:#fff;word-break:break-all;line-height:1.6;letter-spacing:0.5px;}
+.copy-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;border-radius:12px;border:1.5px solid rgba(255,215,0,0.35);background:rgba(255,215,0,0.06);color:var(--gold);font-family:'Lilita One',cursive;font-size:15px;cursor:pointer;transition:all .15s;margin-bottom:10px;}
 .copy-btn:active{background:rgba(255,215,0,0.14);}
 .copy-btn.copied{border-color:rgba(0,230,118,0.4);color:var(--green);background:rgba(0,230,118,0.06);}
-
-.uuid-warn{
-  background:rgba(255,152,0,0.08);border:1px solid rgba(255,152,0,0.2);
-  border-radius:12px;padding:12px 14px;
-  font-size:12px;color:rgba(255,152,0,0.8);line-height:1.6;
-  text-align:left;
-}
+.uuid-warn{background:rgba(255,152,0,0.08);border:1px solid rgba(255,152,0,0.2);border-radius:12px;padding:12px 14px;font-size:12px;color:rgba(255,152,0,0.8);line-height:1.6;text-align:left;}
 .uuid-warn strong{color:var(--orange);}
-
 .uuid-note{font-size:11px;color:rgba(255,255,255,0.2);margin-top:16px;line-height:1.7;}
 
 /* ════════════════════════════════════════════
    SCREEN 3 — VERIFYING
 ════════════════════════════════════════════ */
 #s-verify{background:rgba(4,2,22,0.95);backdrop-filter:blur(30px);text-align:center;}
-.verify-spinner{
-  width:56px;height:56px;
-  border:3px solid rgba(255,215,0,0.12);
-  border-top-color:var(--gold);
-  border-radius:50%;
-  animation:spin .9s linear infinite;
-  margin:0 auto 24px;
-}
+.verify-spinner{width:56px;height:56px;border:3px solid rgba(255,215,0,0.12);border-top-color:var(--gold);border-radius:50%;animation:spin .9s linear infinite;margin:0 auto 24px;}
 .verify-title{font-family:'Lilita One',cursive;font-size:22px;color:var(--gold);margin-bottom:8px;}
 .verify-sub{font-size:13px;color:var(--muted);}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* ════════════════════════════════════════════
-   SCREEN 4 — ACCESS DENIED / EXPIRED
+   SCREEN 4 — ACCESS DENIED
 ════════════════════════════════════════════ */
 #s-denied{background:rgba(4,2,22,0.95);backdrop-filter:blur(30px);text-align:center;}
 .denied-icon{font-size:64px;margin-bottom:20px;}
 .denied-title{font-family:'Lilita One',cursive;font-size:26px;color:var(--red);margin-bottom:10px;}
 .denied-msg{font-size:14px;color:var(--muted);line-height:1.7;max-width:320px;}
-.denied-status{
-  margin-top:20px;display:inline-block;
-  background:rgba(255,68,68,0.1);border:1px solid rgba(255,68,68,0.25);
-  border-radius:20px;padding:6px 18px;
-  font-size:12px;font-weight:800;color:var(--red);letter-spacing:1px;
-}
+.denied-status{margin-top:20px;display:inline-block;background:rgba(255,68,68,0.1);border:1px solid rgba(255,68,68,0.25);border-radius:20px;padding:6px 18px;font-size:12px;font-weight:800;color:var(--red);letter-spacing:1px;}
 
 /* ════════════════════════════════════════════
    SCREEN 5 — MAIN APP
@@ -243,14 +146,13 @@ body{
 #s-app{
   position:fixed;inset:0;z-index:10;
   overflow-y:auto;
-  display:none; /* toggled via JS, not .active class */
+  display:none;
   flex-direction:column;
   opacity:0;
   transition:opacity .4s ease;
 }
 #s-app.active{display:flex;opacity:1;pointer-events:all;}
 
-/* ── SCROLL WRAP ── */
 #wrap{
   position:relative;z-index:1;
   max-width:440px;margin:0 auto;
@@ -262,24 +164,19 @@ body{
 ════════════════════════════════ */
 .hdr{text-align:center;padding:20px 0 10px;}
 .hdr-title{
-  font-family:'Lilita One',cursive;
-  font-size:32px;letter-spacing:2px;
+  font-family:'Lilita One',cursive;font-size:32px;letter-spacing:2px;
   background:linear-gradient(180deg,#fff 0%,#ffd700 50%,#ff9800 100%);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
-  filter:drop-shadow(0 2px 14px rgba(255,200,0,0.55));
-  margin-bottom:8px;
+  filter:drop-shadow(0 2px 14px rgba(255,200,0,0.55));margin-bottom:8px;
 }
+/* Single status pill — no round, no sub-line */
 .hdr-pill{
   display:inline-flex;align-items:center;gap:6px;
   background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.16);
   border-radius:30px;padding:5px 14px;
   font-size:12px;font-weight:700;color:var(--muted);letter-spacing:1px;
 }
-.ldot{
-  width:7px;height:7px;border-radius:50%;
-  background:var(--green);box-shadow:0 0 9px var(--green);
-  animation:blink 1.6s infinite;
-}
+.ldot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 9px var(--green);animation:blink 1.6s infinite;}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
 
 .auto-bar{
@@ -288,31 +185,14 @@ body{
   background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.08);
   border-radius:12px;font-size:12px;font-weight:700;color:var(--muted);letter-spacing:0.5px;
 }
-.auto-bar .cdot{
-  width:6px;height:6px;border-radius:50%;
-  background:var(--cyan);box-shadow:0 0 7px var(--cyan);
-  animation:blink 1.6s infinite;flex-shrink:0;
-}
-.auto-bar .cd{
-  background:rgba(0,0,0,0.3);border-radius:20px;
-  padding:2px 10px;font-size:12px;color:rgba(255,255,255,0.45);
-  font-family:'Share Tech Mono',monospace;
-}
+.auto-bar .cdot{width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 7px var(--cyan);animation:blink 1.6s infinite;flex-shrink:0;}
+.auto-bar .cd{background:rgba(0,0,0,0.3);border-radius:20px;padding:2px 10px;font-size:12px;color:rgba(255,255,255,0.45);font-family:'Share Tech Mono',monospace;}
 
 /* ════════════════════════════════
    GLASS CARD
 ════════════════════════════════ */
-.card{
-  background:var(--card);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
-  border:1px solid var(--cbord);border-radius:var(--r);
-  padding:16px;margin-bottom:10px;
-  box-shadow:0 8px 36px rgba(0,0,0,0.5);
-}
-.ctitle{
-  font-family:'Lilita One',cursive;font-size:13px;letter-spacing:1.5px;
-  color:var(--gold);text-transform:uppercase;margin-bottom:14px;
-  display:flex;align-items:center;gap:8px;
-}
+.card{background:var(--card);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid var(--cbord);border-radius:var(--r);padding:16px;margin-bottom:10px;box-shadow:0 8px 36px rgba(0,0,0,0.5);}
+.ctitle{font-family:'Lilita One',cursive;font-size:13px;letter-spacing:1.5px;color:var(--gold);text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
 .ctitle::after{content:'';flex:1;height:1px;background:rgba(255,215,0,0.18);}
 
 /* ════════════════════════════════
@@ -325,70 +205,45 @@ body{
   box-shadow:0 0 70px rgba(110,50,255,0.14),0 8px 40px rgba(0,0,0,0.65);
   position:relative;overflow:hidden;
 }
-.arena::before{
-  content:'';position:absolute;inset:0;border-radius:22px;
-  background:radial-gradient(ellipse 80% 55% at 50% 0%,rgba(150,70,255,0.09) 0%,transparent 65%);
-  pointer-events:none;
-}
+.arena::before{content:'';position:absolute;inset:0;border-radius:22px;background:radial-gradient(ellipse 80% 55% at 50% 0%,rgba(150,70,255,0.09) 0%,transparent 65%);pointer-events:none;}
+
+/* Round number row — no "Latest" sub-line */
 .rrow{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
 .rnum{font-family:'Lilita One',cursive;font-size:22px;color:var(--gold);text-shadow:0 0 18px rgba(255,215,0,0.5);}
-.rsub{font-size:10px;color:var(--muted);font-family:'Share Tech Mono',monospace;margin-top:2px;}
-.reset-pill{
-  font-size:10px;color:var(--muted);font-family:'Share Tech Mono',monospace;
-  background:rgba(0,0,0,0.35);border-radius:10px;padding:3px 9px;
-  border:1px solid rgba(255,255,255,0.1);
-}
-.abanner{
-  border-radius:13px;padding:11px 14px;margin-bottom:18px;
-  display:flex;align-items:center;gap:10px;
-  font-family:'Lilita One',cursive;font-size:18px;
-}
-.abanner.play{
-  background:linear-gradient(135deg,rgba(0,230,118,0.15),rgba(0,230,118,0.05));
-  border:1.5px solid rgba(0,230,118,0.42);color:var(--green);
-  box-shadow:0 0 22px rgba(0,230,118,0.09);
-}
-.abanner.skip{
-  background:linear-gradient(135deg,rgba(255,68,68,0.13),rgba(255,68,68,0.04));
-  border:1.5px solid rgba(255,68,68,0.35);color:var(--red);
-}
+.reset-pill{font-size:10px;color:var(--muted);font-family:'Share Tech Mono',monospace;background:rgba(0,0,0,0.35);border-radius:10px;padding:3px 9px;border:1px solid rgba(255,255,255,0.1);}
+
+.abanner{border-radius:13px;padding:11px 14px;margin-bottom:18px;display:flex;align-items:center;gap:10px;font-family:'Lilita One',cursive;font-size:18px;}
+.abanner.play{background:linear-gradient(135deg,rgba(0,230,118,0.15),rgba(0,230,118,0.05));border:1.5px solid rgba(0,230,118,0.42);color:var(--green);box-shadow:0 0 22px rgba(0,230,118,0.09);}
+.abanner.skip{background:linear-gradient(135deg,rgba(255,68,68,0.13),rgba(255,68,68,0.04));border:1.5px solid rgba(255,68,68,0.35);color:var(--red);}
 .aicon{font-size:24px;flex-shrink:0;line-height:1;}
 .asub{font-family:'Nunito',sans-serif;font-size:12px;font-weight:600;opacity:0.6;margin-top:2px;}
 
-.picks{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:18px;}
-.ppick{display:flex;flex-direction:column;align-items:center;gap:7px;flex:1;}
+/* ── PICKS — supports 2 or 3 picks ── */
+.picks{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:18px;flex-wrap:nowrap;}
+.ppick{display:flex;flex-direction:column;align-items:center;gap:7px;flex:1;min-width:0;}
 .ppick-rank{font-size:9px;font-weight:800;color:var(--muted);letter-spacing:2px;text-transform:uppercase;}
 .planet-wrap{position:relative;width:92px;height:92px;display:flex;align-items:center;justify-content:center;}
-.gring{
-  position:absolute;inset:-9px;border-radius:50%;border:2px solid;opacity:0.45;
-  animation:gspin 7s linear infinite;
-}
+.planet-wrap.sm{width:72px;height:72px;}
+.gring{position:absolute;inset:-9px;border-radius:50%;border:2px solid;opacity:0.45;animation:gspin 7s linear infinite;}
 .gring.rev{animation-direction:reverse;animation-duration:5s;}
+.gring.sm{inset:-6px;}
 @keyframes gspin{to{transform:rotate(360deg)}}
-.planet-img{
-  width:82px;height:82px;object-fit:contain;
-  animation:pfloat 3.2s ease-in-out infinite;
-  filter:drop-shadow(0 0 16px var(--gc,#fff));
-}
+.planet-img{width:82px;height:82px;object-fit:contain;animation:pfloat 3.2s ease-in-out infinite;filter:drop-shadow(0 0 16px var(--gc,#fff));}
+.planet-img.sm{width:64px;height:64px;}
 .planet-img.d1{animation-delay:-1.6s;}
+.planet-img.d2{animation-delay:-0.8s;}
 @keyframes pfloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
 .pname{font-family:'Lilita One',cursive;font-size:15px;text-align:center;line-height:1.1;}
+.pname.sm{font-size:12px;}
 .pconf{font-size:11px;color:var(--muted);font-family:'Share Tech Mono',monospace;margin-top:1px;}
 .picks-or{font-family:'Lilita One',cursive;font-size:22px;color:rgba(255,255,255,0.25);flex-shrink:0;}
+.picks-or.sm{font-size:16px;}
 
-.bonus-sec{
-  background:linear-gradient(135deg,rgba(255,152,0,0.11),rgba(255,100,0,0.04));
-  border:1.5px solid rgba(255,152,0,0.38);border-radius:14px;padding:13px 12px 10px;
-  margin-bottom:16px;position:relative;overflow:hidden;
-}
+.bonus-sec{background:linear-gradient(135deg,rgba(255,152,0,0.11),rgba(255,100,0,0.04));border:1.5px solid rgba(255,152,0,0.38);border-radius:14px;padding:13px 12px 10px;margin-bottom:16px;position:relative;overflow:hidden;}
 .bonus-sec::after{content:'🎰';position:absolute;right:6px;top:-2px;font-size:44px;opacity:0.09;pointer-events:none;}
 .bonus-hdr{display:flex;align-items:center;gap:6px;margin-bottom:11px;}
 .bonus-title{font-family:'Lilita One',cursive;font-size:12px;letter-spacing:1px;color:var(--orange);text-transform:uppercase;}
-.bonus-tag2{
-  margin-left:auto;font-size:9px;font-weight:800;color:rgba(255,152,0,0.6);
-  background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.22);
-  border-radius:20px;padding:2px 8px;
-}
+.bonus-tag2{margin-left:auto;font-size:9px;font-weight:800;color:rgba(255,152,0,0.6);background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.22);border-radius:20px;padding:2px 8px;}
 .bpicks{display:flex;align-items:center;justify-content:center;gap:10px;}
 .bpick{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;}
 .bplanet{width:62px;height:62px;object-fit:contain;animation:pfloat 3.8s ease-in-out infinite;filter:drop-shadow(0 0 10px rgba(255,152,0,0.5));}
@@ -407,11 +262,7 @@ body{
 .l10lbl{color:rgba(255,255,255,0.2);margin-right:3px;}
 .l10b{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-size:9px;font-weight:800;}
 
-.srow{
-  display:grid;grid-template-columns:46px 1fr 70px 44px;
-  align-items:center;gap:7px;padding:7px 10px;border-radius:11px;margin-bottom:5px;
-  background:rgba(255,255,255,0.04);border:1px solid transparent;transition:all .2s;
-}
+.srow{display:grid;grid-template-columns:46px 1fr 70px 44px;align-items:center;gap:7px;padding:7px 10px;border-radius:11px;margin-bottom:5px;background:rgba(255,255,255,0.04);border:1px solid transparent;transition:all .2s;}
 .srow.spick{background:rgba(255,215,0,0.06);border-color:rgba(255,215,0,0.2);}
 .srow.sbonus{background:rgba(255,152,0,0.05);border-color:rgba(255,152,0,0.2);}
 .splanet{width:34px;height:34px;object-fit:contain;filter:drop-shadow(0 0 5px rgba(255,255,255,0.15));}
@@ -421,12 +272,16 @@ body{
 .stag{font-size:8px;font-weight:800;letter-spacing:0.4px;padding:1px 5px;border-radius:8px;}
 .stag-p{background:rgba(255,215,0,0.15);color:var(--gold);}
 .stag-b{background:rgba(255,152,0,0.15);color:var(--orange);}
+.stag-3{background:rgba(0,229,255,0.15);color:var(--cyan);}
 .sbwrap{height:5px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden;}
 .sbar{height:100%;border-radius:3px;transition:width .7s ease;}
 .spct{font-family:'Share Tech Mono',monospace;font-size:11px;text-align:right;color:var(--muted);}
 .srow.spick .spct{color:var(--gold);}
 .srow.sbonus .spct{color:var(--orange);}
 
+/* ════════════════════════════════
+   LIVE RESULTS STATS (replaces sim stats)
+════════════════════════════════ */
 .sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;}
 .sbox{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:12px 6px;text-align:center;}
 .sval{font-family:'Lilita One',cursive;font-size:22px;color:var(--cyan);line-height:1;}
@@ -435,11 +290,7 @@ body{
 
 .hstrip{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;}
 .hstrip::-webkit-scrollbar{display:none;}
-.hitem{
-  flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:3px;
-  padding:8px 6px;min-width:54px;
-  background:rgba(255,255,255,0.05);border-radius:12px;border:1px solid rgba(255,255,255,0.08);
-}
+.hitem{flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 6px;min-width:54px;background:rgba(255,255,255,0.05);border-radius:12px;border:1px solid rgba(255,255,255,0.08);}
 .himg{width:36px;height:36px;object-fit:contain;}
 .hname{font-size:8px;font-weight:800;color:var(--muted);text-align:center;line-height:1.2;}
 .hrnd{font-size:8px;color:rgba(255,255,255,0.22);font-family:'Share Tech Mono',monospace;}
@@ -460,6 +311,7 @@ body{
 .rball{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.06);overflow:hidden;}
 .rball img{width:24px;height:24px;object-fit:contain;}
 .rball.bball{outline:1.5px dashed rgba(255,152,0,0.4);outline-offset:1px;opacity:0.65;}
+.rball.p3ball{outline:1.5px dashed rgba(0,229,255,0.4);outline-offset:1px;opacity:0.75;}
 .rsep{font-size:10px;color:rgba(255,152,0,0.4);font-weight:800;}
 .ract{display:flex;align-items:center;gap:5px;}
 .ract img{width:26px;height:26px;object-fit:contain;}
@@ -480,40 +332,30 @@ body{
 @media(max-width:360px){
   .planet-img{width:70px;height:70px;}
   .planet-wrap{width:78px;height:78px;}
+  .planet-img.sm{width:54px;height:54px;}
+  .planet-wrap.sm{width:60px;height:60px;}
 }
 </style>
 </head>
 <body>
 <div id="bg"></div>
 
-<!-- ═══════════════════════════════════════════════
-     SCREEN 1: Browser Gate (not a PWA)
-═══════════════════════════════════════════════ -->
+<!-- SCREEN 1: Browser Gate -->
 <div class="screen" id="s-browser">
   <div class="gate-logo">✨ TREASURE AI ✨</div>
   <div class="gate-sub">INSTALL REQUIRED TO ACCESS</div>
-
   <div class="gate-card">
     <div class="gate-icon">📲</div>
     <div class="gate-title">App Install Required</div>
-    <div class="gate-desc">
-      Treasure AI works as an installed app only.<br>
-      Direct browser access is disabled for security.
-    </div>
-    <button class="install-btn" id="installBtn" disabled>
-      <span>⏳</span> Preparing Install...
-    </button>
+    <div class="gate-desc">Treasure AI works as an installed app only.<br>Direct browser access is disabled for security.</div>
+    <button class="install-btn" id="installBtn" disabled><span>⏳</span> Preparing Install...</button>
   </div>
-
-  <!-- Android Chrome steps (shown by default) -->
   <div class="gate-steps" id="androidSteps">
     <div class="gate-steps-title">How to Install</div>
     <div class="step"><div class="step-n">1</div><div>Tap <strong style="color:#fff">Install</strong> button above when it appears</div></div>
     <div class="step"><div class="step-n">2</div><div>Or tap <strong style="color:#fff">⋮ Menu → Add to Home screen</strong></div></div>
     <div class="step"><div class="step-n">3</div><div>Open the installed app from your home screen</div></div>
   </div>
-
-  <!-- iOS Safari steps -->
   <div class="gate-steps ios-steps" id="iosSteps">
     <div class="gate-steps-title">Install on iPhone / iPad</div>
     <div class="step"><div class="step-n">1</div><div>Open this page in <strong style="color:#fff">Safari</strong> browser</div></div>
@@ -522,50 +364,31 @@ body{
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════
-     SCREEN 2: UUID Reveal (first time in PWA)
-═══════════════════════════════════════════════ -->
+<!-- SCREEN 2: UUID Reveal -->
 <div class="screen" id="s-uuid">
   <div class="uuid-logo">✨ TREASURE AI ✨</div>
   <div class="uuid-badge">YOUR ACCESS KEY</div>
-
   <div class="uuid-card">
     <div class="uuid-card-title">🔑 Your Unique ID</div>
-    <div class="uuid-card-desc">
-      This is your personal access key. Share it with the admin to get access activated. Once activated, this app will unlock automatically.
-    </div>
-
+    <div class="uuid-card-desc">This is your personal access key. Share it with the admin to get access activated. Once activated, this app will unlock automatically.</div>
     <div class="uuid-box">
       <div class="uuid-label">Device UUID</div>
       <div class="uuid-val" id="uuidDisplay">Generating...</div>
     </div>
-
-    <button class="copy-btn" id="copyBtn">
-      <span>📋</span> Copy UUID
-    </button>
-
-    <div class="uuid-warn">
-      <strong>⚠ Important:</strong> This UUID is stored only on this device. Do not uninstall the app or clear app data — your UUID will change and you'll need re-activation.
-    </div>
+    <button class="copy-btn" id="copyBtn"><span>📋</span> Copy UUID</button>
+    <div class="uuid-warn"><strong>⚠ Important:</strong> This UUID is stored only on this device. Do not uninstall the app or clear app data — your UUID will change and you'll need re-activation.</div>
   </div>
-
-  <div class="uuid-note">
-    After sharing your UUID with admin,<br>close and reopen the app to check access.
-  </div>
+  <div class="uuid-note">After sharing your UUID with admin,<br>close and reopen the app to check access.</div>
 </div>
 
-<!-- ═══════════════════════════════════════════════
-     SCREEN 3: Verifying
-═══════════════════════════════════════════════ -->
+<!-- SCREEN 3: Verifying -->
 <div class="screen" id="s-verify">
   <div class="verify-spinner"></div>
   <div class="verify-title">Verifying Access...</div>
   <div class="verify-sub">Please wait a moment</div>
 </div>
 
-<!-- ═══════════════════════════════════════════════
-     SCREEN 4: Access Denied / Expired
-═══════════════════════════════════════════════ -->
+<!-- SCREEN 4: Access Denied -->
 <div class="screen" id="s-denied">
   <div class="denied-icon" id="deniedIcon">🚫</div>
   <div class="denied-title" id="deniedTitle">Access Denied</div>
@@ -573,13 +396,12 @@ body{
   <div class="denied-status" id="deniedStatus">NO ACCESS</div>
 </div>
 
-<!-- ═══════════════════════════════════════════════
-     SCREEN 5: Main App
-═══════════════════════════════════════════════ -->
+<!-- SCREEN 5: Main App -->
 <div id="s-app">
   <div id="wrap">
     <div class="hdr">
       <div class="hdr-title">✨ TREASURE AI ✨</div>
+      <!-- Single status line only — no round, no sub-text -->
       <div class="hdr-pill">
         <span class="ldot"></span>
         <span id="statusText">Connecting...</span>
@@ -601,17 +423,15 @@ body{
 
 <script>
 /* ════════════════════════════════════════════════════
-   CONFIG — MUST match worker.js
+   CONFIG
 ════════════════════════════════════════════════════ */
 const SHARED_SECRET   = "TreasureAI-S3cr3t-K3y-Change-This-2025!xQ9mZ";
 const WORKER_URL      = "https://noisy-truth-6bf7.aayushraj699.workers.dev/verify";
-//                       ↑ Replace with your Cloudflare Worker URL
-
 const IDB_DB_NAME     = "TreasureAI";
 const IDB_STORE       = "auth";
 const IDB_UUID_KEY    = "uuid";
-const IDB_ACCESS_KEY  = "access_cache";  // cache last valid auth result
-const ACCESS_CACHE_MS = 30 * 60 * 1000; // re-verify every 30 minutes
+const IDB_ACCESS_KEY  = "access_cache";
+const ACCESS_CACHE_MS = 30 * 60 * 1000;
 
 /* ════════════════════════════════════════════════════
    SCREEN MANAGER
@@ -620,7 +440,6 @@ function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   const appEl = document.getElementById('s-app');
   appEl.classList.remove('active');
-
   if (id === 's-app') {
     appEl.classList.add('active');
   } else {
@@ -635,28 +454,24 @@ function showScreen(id) {
 function openDB() {
   return new Promise((res, rej) => {
     const req = indexedDB.open(IDB_DB_NAME, 1);
-    req.onupgradeneeded = e => {
-      e.target.result.createObjectStore(IDB_STORE);
-    };
+    req.onupgradeneeded = e => { e.target.result.createObjectStore(IDB_STORE); };
     req.onsuccess = e => res(e.target.result);
     req.onerror   = e => rej(e.target.error);
   });
 }
-
 async function idbGet(key) {
   const db = await openDB();
   return new Promise((res, rej) => {
-    const tx  = db.transaction(IDB_STORE, 'readonly');
+    const tx = db.transaction(IDB_STORE, 'readonly');
     const req = tx.objectStore(IDB_STORE).get(key);
     req.onsuccess = e => res(e.target.result);
     req.onerror   = e => rej(e.target.error);
   });
 }
-
 async function idbSet(key, value) {
   const db = await openDB();
   return new Promise((res, rej) => {
-    const tx  = db.transaction(IDB_STORE, 'readwrite');
+    const tx = db.transaction(IDB_STORE, 'readwrite');
     const req = tx.objectStore(IDB_STORE).put(value, key);
     req.onsuccess = () => res();
     req.onerror   = e  => rej(e.target.error);
@@ -664,72 +479,47 @@ async function idbSet(key, value) {
 }
 
 /* ════════════════════════════════════════════════════
-   UUID GENERATION (crypto random, stored in IndexedDB)
+   UUID
 ════════════════════════════════════════════════════ */
 function generateUUID() {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
-  bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
-  bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
   const hex = Array.from(bytes).map(b => b.toString(16).padStart(2,'0')).join('');
-  return [
-    hex.slice(0,8), hex.slice(8,12), hex.slice(12,16),
-    hex.slice(16,20), hex.slice(20)
-  ].join('-');
+  return [hex.slice(0,8),hex.slice(8,12),hex.slice(12,16),hex.slice(16,20),hex.slice(20)].join('-');
 }
-
 async function getOrCreateUUID() {
   let uuid = await idbGet(IDB_UUID_KEY);
-  if (!uuid) {
-    uuid = generateUUID();
-    await idbSet(IDB_UUID_KEY, uuid);
-  }
+  if (!uuid) { uuid = generateUUID(); await idbSet(IDB_UUID_KEY, uuid); }
   return uuid;
 }
 
 /* ════════════════════════════════════════════════════
-   HMAC SIGNING (Web Crypto API — same algo as worker)
+   HMAC SIGNING
 ════════════════════════════════════════════════════ */
 async function hmacSign(payload, secret) {
   const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    'raw', enc.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false, ['sign']
-  );
-  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(payload));
+  const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name:'HMAC', hash:'SHA-256' }, false, ['sign']);
+  const sig  = await crypto.subtle.sign('HMAC', key, enc.encode(payload));
   return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
 
 /* ════════════════════════════════════════════════════
-   VERIFY UUID with Cloudflare Worker
+   VERIFY
 ════════════════════════════════════════════════════ */
 async function verifyWithWorker(uuid) {
-  const ts      = Math.floor(Date.now() / 1000);
+  const ts = Math.floor(Date.now() / 1000);
   const payload = `${uuid}:${ts}`;
-  const sig     = await hmacSign(payload, SHARED_SECRET);
-
-  const resp = await fetch(WORKER_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ uuid, ts, sig }),
-  });
-
-  if (!resp.ok) {
-    throw new Error(`HTTP ${resp.status}`);
-  }
-
+  const sig = await hmacSign(payload, SHARED_SECRET);
+  const resp = await fetch(WORKER_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({uuid,ts,sig}) });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const data = await resp.json();
-
-  // Validate response timestamp (anti-replay on response side)
   if (data._ts) {
     const serverTs = Number(data._ts);
-    const now      = Math.floor(Date.now() / 1000);
-    if (Math.abs(now - serverTs) > 25) { // 25s window (5s buffer for network)
-      throw new Error('Response timestamp invalid');
-    }
+    const now = Math.floor(Date.now() / 1000);
+    if (Math.abs(now - serverTs) > 25) throw new Error('Response timestamp invalid');
   }
-
   return data;
 }
 
@@ -739,81 +529,38 @@ async function verifyWithWorker(uuid) {
 function isRunningAsPWA() {
   return (
     window.matchMedia('(display-mode: standalone)').matches ||
-    window.navigator.standalone === true ||  // iOS Safari
+    window.navigator.standalone === true ||
     document.referrer.includes('android-app://')
   );
 }
-
-function isIOS() {
-  return /iphone|ipad|ipod/i.test(navigator.userAgent);
-}
+function isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent); }
 
 /* ════════════════════════════════════════════════════
-   MAIN BOOT FLOW
+   BOOT
 ════════════════════════════════════════════════════ */
 async function boot() {
-  // 1. Check if running as PWA
-  if (!isRunningAsPWA()) {
-    showScreen('s-browser');
-    initInstallFlow();
-    return;
-  }
-
-  // 2. Get or create UUID
+  if (!isRunningAsPWA()) { showScreen('s-browser'); initInstallFlow(); return; }
   let uuid;
-  try {
-    uuid = await getOrCreateUUID();
-  } catch(e) {
-    console.error('IDB error', e);
-    // Fallback: show UUID screen with error
-    showScreen('s-uuid');
-    document.getElementById('uuidDisplay').textContent = 'Storage error — try reinstalling app';
-    return;
-  }
-
-  // 3. Check local access cache first (skip network if recently verified)
+  try { uuid = await getOrCreateUUID(); }
+  catch(e) { showScreen('s-uuid'); document.getElementById('uuidDisplay').textContent='Storage error — try reinstalling app'; return; }
   let cache;
-  try {
-    cache = await idbGet(IDB_ACCESS_KEY);
-  } catch { cache = null; }
-
-  if (cache && cache.ok && (Date.now() - cache.cachedAt) < ACCESS_CACHE_MS) {
-    // Still within cache window — go straight to app
-    launchApp();
-    return;
-  }
-
-  // 4. Show verifying screen
+  try { cache = await idbGet(IDB_ACCESS_KEY); } catch { cache = null; }
+  if (cache && cache.ok && (Date.now() - cache.cachedAt) < ACCESS_CACHE_MS) { launchApp(); return; }
   showScreen('s-verify');
-
-  // 5. Try network verification
   let result;
-  try {
-    result = await verifyWithWorker(uuid);
-  } catch(e) {
+  try { result = await verifyWithWorker(uuid); }
+  catch(e) {
     console.warn('Verify failed:', e);
-    // Network error — if we had any previous cached valid access, allow in (grace period)
-    if (cache && cache.ok) {
-      launchApp();
-      return;
-    }
-    // No cache, no network — show UUID screen (first-time user, no access yet)
-    showUUIDScreen(uuid);
-    return;
+    if (cache && cache.ok) { launchApp(); return; }
+    showUUIDScreen(uuid); return;
   }
-
   if (result.ok && result.status === 'active') {
-    // Cache this success
-    try {
-      await idbSet(IDB_ACCESS_KEY, { ok: true, cachedAt: Date.now(), expiry: result.expiry });
-    } catch {}
+    try { await idbSet(IDB_ACCESS_KEY, { ok:true, cachedAt:Date.now(), expiry:result.expiry }); } catch {}
     launchApp();
   } else if (result.status === 'expired') {
-    // Clear cache
     try { await idbSet(IDB_ACCESS_KEY, null); } catch {}
     showDenied('expired');
   } else {
-    // not_found or other
     try { await idbSet(IDB_ACCESS_KEY, null); } catch {}
     showUUIDScreen(uuid);
   }
@@ -822,111 +569,60 @@ async function boot() {
 function showUUIDScreen(uuid) {
   showScreen('s-uuid');
   document.getElementById('uuidDisplay').textContent = uuid;
-
   const copyBtn = document.getElementById('copyBtn');
   copyBtn.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(uuid);
-      copyBtn.innerHTML = '<span>✅</span> Copied!';
-      copyBtn.classList.add('copied');
-      setTimeout(() => {
-        copyBtn.innerHTML = '<span>📋</span> Copy UUID';
-        copyBtn.classList.remove('copied');
-      }, 2500);
     } catch {
-      // Fallback
       const ta = document.createElement('textarea');
-      ta.value = uuid;
-      ta.style.cssText = 'position:fixed;opacity:0';
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      copyBtn.innerHTML = '<span>✅</span> Copied!';
-      copyBtn.classList.add('copied');
-      setTimeout(() => {
-        copyBtn.innerHTML = '<span>📋</span> Copy UUID';
-        copyBtn.classList.remove('copied');
-      }, 2500);
+      ta.value = uuid; ta.style.cssText='position:fixed;opacity:0';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
     }
+    copyBtn.innerHTML='<span>✅</span> Copied!'; copyBtn.classList.add('copied');
+    setTimeout(()=>{copyBtn.innerHTML='<span>📋</span> Copy UUID';copyBtn.classList.remove('copied');},2500);
   });
 }
 
 function showDenied(reason) {
   showScreen('s-denied');
-  const icon  = document.getElementById('deniedIcon');
-  const title = document.getElementById('deniedTitle');
-  const msg   = document.getElementById('deniedMsg');
-  const stat  = document.getElementById('deniedStatus');
-
   if (reason === 'expired') {
-    icon.textContent  = '⏰';
-    title.textContent = 'Access Expired';
-    msg.textContent   = 'Your access period has ended. Please contact the admin to renew your subscription.';
-    stat.textContent  = 'EXPIRED';
-  } else {
-    icon.textContent  = '🚫';
-    title.textContent = 'Access Denied';
-    msg.textContent   = 'Your UUID has not been activated. Share your UUID with the admin to get access.';
-    stat.textContent  = 'NO ACCESS';
+    document.getElementById('deniedIcon').textContent='⏰';
+    document.getElementById('deniedTitle').textContent='Access Expired';
+    document.getElementById('deniedMsg').textContent='Your access period has ended. Please contact the admin to renew your subscription.';
+    document.getElementById('deniedStatus').textContent='EXPIRED';
   }
 }
 
 /* ════════════════════════════════════════════════════
-   INSTALL FLOW (Browser Gate Screen)
+   INSTALL FLOW
 ════════════════════════════════════════════════════ */
 let deferredPrompt = null;
-
 function initInstallFlow() {
   const btn = document.getElementById('installBtn');
-
-  // Detect iOS
   if (isIOS()) {
-    document.getElementById('androidSteps').style.display = 'none';
-    document.getElementById('iosSteps').style.display = 'block';
-    btn.innerHTML = '<span>📱</span> See Install Steps Above';
-    btn.disabled = false;
-    btn.style.opacity = '0.7';
-    return;
+    document.getElementById('androidSteps').style.display='none';
+    document.getElementById('iosSteps').style.display='block';
+    btn.innerHTML='<span>📱</span> See Install Steps Above'; btn.disabled=false; btn.style.opacity='0.7'; return;
   }
-
-  // Android Chrome — listen for beforeinstallprompt
   window.addEventListener('beforeinstallprompt', e => {
-    e.preventDefault();
-    deferredPrompt = e;
-    btn.innerHTML  = '<span>📲</span> Install Treasure AI';
-    btn.disabled   = false;
-
+    e.preventDefault(); deferredPrompt=e;
+    btn.innerHTML='<span>📲</span> Install Treasure AI'; btn.disabled=false;
     btn.addEventListener('click', async () => {
       if (!deferredPrompt) return;
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
-      deferredPrompt = null;
-      if (outcome === 'accepted') {
-        btn.innerHTML = '<span>✅</span> Installing...';
-        btn.disabled  = true;
-      }
+      deferredPrompt=null;
+      if (outcome==='accepted') { btn.innerHTML='<span>✅</span> Installing...'; btn.disabled=true; }
     });
   });
-
-  // If app is already installed but opened in browser tab
-  window.addEventListener('appinstalled', () => {
-    btn.innerHTML = '<span>✅</span> App Installed! Open from home screen';
-    btn.disabled  = true;
-  });
-
-  // Timeout — if prompt never fires (already installed, or unsupported)
-  setTimeout(() => {
-    if (btn.disabled && !deferredPrompt) {
-      btn.innerHTML = '<span>⋮</span> Use Menu → Add to Home Screen';
-      btn.disabled  = false;
-      btn.style.opacity = '0.7';
-    }
-  }, 3000);
+  window.addEventListener('appinstalled', () => { btn.innerHTML='<span>✅</span> App Installed! Open from home screen'; btn.disabled=true; });
+  setTimeout(()=>{
+    if (btn.disabled && !deferredPrompt) { btn.innerHTML='<span>⋮</span> Use Menu → Add to Home Screen'; btn.disabled=false; btn.style.opacity='0.7'; }
+  },3000);
 }
 
 /* ════════════════════════════════════════════════════
-   APP LAUNCH — prediction UI (unchanged logic)
+   APP ASSETS
 ════════════════════════════════════════════════════ */
 const BALL = {
   1:'https://m.starmakerstudios.com/cdn/vue/agile-vue3/views/spa-rhapsody-music/web-sync/img/new/ball/ball1-a991f.png',
@@ -938,8 +634,8 @@ const BALL = {
   7:'https://m.starmakerstudios.com/cdn/vue/agile-vue3/views/spa-rhapsody-music/web-sync/img/new/ball/ball7-fa9cf.png',
   8:'https://m.starmakerstudios.com/cdn/vue/agile-vue3/views/spa-rhapsody-music/web-sync/img/new/ball/ball8-6f990.png',
 };
-const NAMES = {1:'Purple',2:'10 Times',3:'25 Times',4:'15 Times',5:'Yellow',6:'Light Green',7:'50 Times',8:'Dark Green'};
-const COLORS= {1:'#c084fc',2:'#f87171',3:'#fb923c',4:'#facc15',5:'#fde047',6:'#4ade80',7:'#22d3ee',8:'#22c55e'};
+const NAMES  = {1:'Purple',2:'10 Times',3:'25 Times',4:'15 Times',5:'Yellow',6:'Light Green',7:'50 Times',8:'Dark Green'};
+const COLORS = {1:'#c084fc',2:'#f87171',3:'#fb923c',4:'#facc15',5:'#fde047',6:'#4ade80',7:'#22d3ee',8:'#22c55e'};
 
 const fmt = n => n!=null ? n.toLocaleString() : '—';
 const img = (idx, cls='', sty='') =>
@@ -948,53 +644,68 @@ const img = (idx, cls='', sty='') =>
 let cdEl=null, countdown=5, lastRound=null;
 
 function buildUI(pred, stats, history, status) {
-  const isPlay = pred.action==='PLAY';
-  const bonus  = pred.bonus_picks||null;
-  const p1=pred.pred1, p2=pred.pred2;
-  const c1=COLORS[p1]||'#fff', c2=COLORS[p2]||'#fff';
+  const isPlay = pred.action === 'PLAY';
+  const bonus  = pred.bonus_picks || null;
+  const p1=pred.pred1, p2=pred.pred2, p3=pred.pred3||null;
+  const c1=COLORS[p1]||'#fff', c2=COLORS[p2]||'#fff', c3=p3?(COLORS[p3]||'#fff'):null;
+  const has3   = isPlay && p3 != null;
 
-  const nr = status&&status.next_reset_in;
+  // ── Round row (no "Latest" sub-line) ──
+  const nr = status && status.next_reset_in;
   const roundHdr = `
     <div class="rrow">
-      <div>
-        <div class="rnum">#${fmt(pred.next_round)}</div>
-        <div class="rsub">Latest: #${fmt(pred.latest_round)}</div>
-      </div>
-      ${nr?`<div class="reset-pill">Reset ${nr}</div>`:''}
+      <div class="rnum">#${fmt(pred.next_round)}</div>
+      ${nr ? `<div class="reset-pill">Reset ${nr}</div>` : ''}
     </div>`;
 
+  // ── Action banner ──
   const abanner = `
     <div class="abanner ${isPlay?'play':'skip'}">
       <div class="aicon">${isPlay?'✅':'⏭'}</div>
       <div>
         <div>${isPlay?'PLAY THIS ROUND':'SKIP THIS ROUND'}</div>
-        <div class="asub">${isPlay?'Choose either planet below':(pred.skip_reason||'')}</div>
+        <div class="asub">${isPlay ? (has3 ? 'Choose any planet below' : 'Choose either planet below') : (pred.skip_reason||'')}</div>
       </div>
     </div>`;
 
+  // ── Picks — 2 or 3 planets ──
+  const sm = has3 ? 'sm' : '';
+  const orSm = has3 ? 'sm' : '';
   const picks = `
     <div class="picks">
       <div class="ppick">
         <div class="ppick-rank">Pick 1</div>
-        <div class="planet-wrap">
-          <div class="gring" style="border-color:${c1}"></div>
-          ${img(p1,'planet-img',`filter:drop-shadow(0 0 16px ${c1})`)}
+        <div class="planet-wrap ${sm}">
+          <div class="gring ${sm}" style="border-color:${c1}"></div>
+          ${img(p1,`planet-img ${sm}`,`filter:drop-shadow(0 0 16px ${c1})`)}
         </div>
-        <div class="pname" style="color:${c1}">${NAMES[p1]||p1}</div>
-        <div class="pconf">${pred.pred1_conf||0}% conf</div>
+        <div class="pname ${sm}" style="color:${c1}">${NAMES[p1]||p1}</div>
+        <div class="pconf">${pred.pred1_conf||0}%</div>
       </div>
-      <div class="picks-or">OR</div>
+      <div class="picks-or ${orSm}">OR</div>
       <div class="ppick">
         <div class="ppick-rank">Pick 2</div>
-        <div class="planet-wrap">
-          <div class="gring rev" style="border-color:${c2}"></div>
-          ${img(p2,'planet-img d1',`filter:drop-shadow(0 0 16px ${c2})`)}
+        <div class="planet-wrap ${sm}">
+          <div class="gring rev ${sm}" style="border-color:${c2}"></div>
+          ${img(p2,`planet-img d1 ${sm}`,`filter:drop-shadow(0 0 16px ${c2})`)}
         </div>
-        <div class="pname" style="color:${c2}">${NAMES[p2]||p2}</div>
-        <div class="pconf">${pred.pred2_conf||0}% conf</div>
+        <div class="pname ${sm}" style="color:${c2}">${NAMES[p2]||p2}</div>
+        <div class="pconf">${pred.pred2_conf||0}%</div>
       </div>
+      ${has3 ? `
+      <div class="picks-or ${orSm}">OR</div>
+      <div class="ppick">
+        <div class="ppick-rank">Pick 3</div>
+        <div class="planet-wrap ${sm}">
+          <div class="gring ${sm}" style="border-color:${c3}"></div>
+          ${img(p3,`planet-img d2 ${sm}`,`filter:drop-shadow(0 0 16px ${c3})`)}
+        </div>
+        <div class="pname ${sm}" style="color:${c3}">${NAMES[p3]||p3}</div>
+        <div class="pconf">${pred.pred3_conf||0}%</div>
+      </div>` : ''}
     </div>`;
 
+  // ── Bonus picks ──
   let bonusHTML = '';
   if (isPlay && bonus && bonus.length) {
     const b1=bonus[0], b2=bonus[1]||null;
@@ -1024,6 +735,7 @@ function buildUI(pred, stats, history, status) {
       </div>`;
   }
 
+  // ── Entropy ──
   const ep  = Math.min(100,(pred.entropy/3)*100);
   const ec  = pred.entropy<2?'#00e676':pred.entropy<2.7?'#facc15':'#ff4444';
   const tp  = (2.7/3)*100;
@@ -1041,53 +753,71 @@ function buildUI(pred, stats, history, status) {
       <div class="last10"><span class="l10lbl">LAST 10 ›</span>${l10}</div>
     </div>`;
 
-  const bset = new Set((bonus||[]).map(b=>b.idx));
+  // ── Score breakdown ──
+  const p3set = p3 ? new Set([p3]) : new Set();
+  const bset  = new Set((bonus||[]).map(b=>b.idx));
   const scores = Object.entries(pred.all_scores||{})
     .sort((a,b)=>b[1]-a[1])
     .map(([idx,sc])=>{
       const i=+idx, c=COLORS[i]||'#fff', nm=NAMES[i]||idx;
-      const isPk=[p1,p2].includes(i), isBn=bset.has(i);
+      const isPk=[p1,p2].includes(i), isBn=bset.has(i), isP3=p3set.has(i)&&!isPk;
       let cls='srow'; if(isPk)cls+=' spick'; else if(isBn)cls+=' sbonus';
-      const tags=[isPk?`<span class="stag stag-p">PICK</span>`:'', isBn?`<span class="stag stag-b">BONUS</span>`:''].join('');
+      const tags=[
+        isPk?`<span class="stag stag-p">PICK</span>`:'',
+        isP3?`<span class="stag stag-3">PICK 3</span>`:'',
+        isBn?`<span class="stag stag-b">BONUS</span>`:'',
+      ].join('');
       return `<div class="${cls}">
         ${img(i,'splanet','')}
         <div class="sinfo">
           <div class="sname" style="color:${c}">${nm}</div>
           ${tags?`<div class="stags">${tags}</div>`:''}
         </div>
-        <div class="sbwrap"><div class="sbar" style="width:${sc}%;background:${(isPk||isBn)?c:c+'55'}"></div></div>
+        <div class="sbwrap"><div class="sbar" style="width:${sc}%;background:${(isPk||isBn||isP3)?c:c+'55'}"></div></div>
         <div class="spct">${sc}%</div>
       </div>`;
     }).join('');
 
-  const ac=(stats.accuracy||0)>=60?'g':'w';
-  const simStats=`
-    <div class="sgrid">
-      <div class="sbox"><div class="sval ${ac}">${stats.accuracy||0}%</div><div class="slbl">Accuracy</div></div>
-      <div class="sbox"><div class="sval">${stats.play_pct||0}%</div><div class="slbl">Play Rate</div></div>
-      <div class="sbox"><div class="sval w">${fmt(stats.max_loss)}</div><div class="slbl">Max Loss</div></div>
-      <div class="sbox"><div class="sval g">${fmt(stats.hits)}</div><div class="slbl">Hits</div></div>
-      <div class="sbox"><div class="sval r">${fmt(stats.misses)}</div><div class="slbl">Misses</div></div>
-      <div class="sbox"><div class="sval">${fmt(stats.played)}</div><div class="slbl">Played</div></div>
-    </div>`;
-
+  // ── Recent history strip ──
   const hist=(history||[]).map(h=>{
-    const nm=NAMES[h.reward_index]||h.reward_index;
     return `<div class="hitem">
       ${img(h.reward_index,'himg','')}
-      <div class="hname">${nm}</div>
+      <div class="hname">${NAMES[h.reward_index]||h.reward_index}</div>
       <div class="hrnd">#${h.round}</div>
     </div>`;
   }).join('');
 
+  // ── Live results (replaces sim stats) ──
   const le=(stats.live_log||[]).slice().reverse();
   const lh=le.filter(r=>r.hit).length, lm=le.length-lh;
   const la=le.length?(lh/le.length*100).toFixed(1):null;
   let cl=0,ct='';
   for(const r of le){if(!cl){ct=r.hit?'W':'L';cl=1;}else if((r.hit&&ct==='W')||(!r.hit&&ct==='L'))cl++;else break;}
+
+  // Live stats grid (replaces simulation stats)
+  const liveStats = le.length ? `
+    <div class="sgrid">
+      <div class="sbox"><div class="sval g">${lh}</div><div class="slbl">Hits</div></div>
+      <div class="sbox"><div class="sval r">${lm}</div><div class="slbl">Misses</div></div>
+      <div class="sbox"><div class="sval ${lh>=lm?'g':'r'}">${la||'—'}%</div><div class="slbl">Accuracy</div></div>
+      <div class="sbox"><div class="sval w">${stats.live_max_loss||0}</div><div class="slbl">Max Loss</div></div>
+      <div class="sbox"><div class="sval">${le.length}</div><div class="slbl">Played</div></div>
+      <div class="sbox"><div class="sval">${cl>1?`${cl}${ct}`:'—'}</div><div class="slbl">Streak</div></div>
+    </div>` : `<div style="text-align:center;padding:18px;color:var(--muted);font-size:13px;">No live results yet</div>`;
+
+  // Live log rows (show pred3 if exists)
   const lrows=le.map(r=>{
-    let ph=`<div class="rball">${img(r.top2[0],'','width:22px;height:22px;object-fit:contain')}</div>
-             <div class="rball">${img(r.top2[1],'','width:22px;height:22px;object-fit:contain')}</div>`;
+    const rowTop3 = r.top3 || r.top2;
+    let ph = rowTop3.map((b,i) => {
+      const cls = i >= 2 ? 'rball p3ball' : 'rball';
+      return `<div class="${cls}">${img(b,'','width:22px;height:22px;object-fit:contain')}</div>`;
+    }).join('');
+    // join preds with separators
+    const predBalls = rowTop3.map((b,i) => {
+      const cls = i >= 2 ? 'rball p3ball' : 'rball';
+      return `<div class="${cls}">${img(b,'','width:22px;height:22px;object-fit:contain')}</div>`;
+    });
+    ph = predBalls.join('');
     if(r.bonus_picks&&r.bonus_picks.length){
       ph+=`<span class="rsep">+</span>`;
       r.bonus_picks.forEach(b=>{ph+=`<div class="rball bball">${img(b,'','width:22px;height:22px;object-fit:contain')}</div>`;});
@@ -1102,8 +832,8 @@ function buildUI(pred, stats, history, status) {
     </div>`;
   }).join('');
 
-  const fe=status&&status.status==='error';
-  const err=fe?`<div class="errbanner"><div class="errt">⚠ API Error — data may be stale</div><div class="errm">${status.last_error||''}</div></div>`:'';
+  const fe = status&&status.status==='error';
+  const err = fe?`<div class="errbanner"><div class="errt">⚠ API Error — data may be stale</div><div class="errm">${status.last_error||''}</div></div>`:'';
 
   document.getElementById('app').innerHTML=`
     ${err}
@@ -1112,7 +842,7 @@ function buildUI(pred, stats, history, status) {
     </div>
     ${hist?`<div class="card"><div class="ctitle">Recent History</div><div class="hstrip">${hist}</div></div>`:''}
     <div class="card"><div class="ctitle">Score Breakdown</div>${scores}</div>
-    <div class="card"><div class="ctitle">Simulation Stats</div>${simStats}</div>
+    <div class="card"><div class="ctitle">Live Results Stats</div>${liveStats}</div>
     ${le.length?`<div class="card" style="padding-bottom:0">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <div class="ctitle" style="margin:0">Live Results</div>
@@ -1138,6 +868,7 @@ function buildUI(pred, stats, history, status) {
 
 async function refreshAll(){
   try{
+    // Status text: just "Live" — no round number
     document.getElementById('statusText').textContent='Refreshing...';
     const [pR,sR,hR,stR]=await Promise.all([
       fetch('/api/predict'),fetch('/api/stats'),
@@ -1145,13 +876,14 @@ async function refreshAll(){
     ]);
     if(!pR.ok)throw new Error('Not ready');
     const [pred,stats,history,status]=await Promise.all([
-      pR.json(),sR.json(),hR.json(),stR.ok?stR.json():{}
+      pR.json(),sR.json(),hR.json(),stR.ok?stR.json():{},
     ]);
     buildUI(pred,stats,history,status);
-    document.getElementById('statusText').textContent=`Round #${pred.latest_round} · Live`;
+    // Single status: just "Live" with dot
+    document.getElementById('statusText').textContent='Live';
     countdown=5;
   }catch(e){
-    document.getElementById('statusText').textContent='Connection error';
+    document.getElementById('statusText').textContent='Connection Error';
     console.error(e);
   }
 }
@@ -1167,15 +899,12 @@ function launchApp() {
 }
 
 /* ════════════════════════════════════════════════════
-   SERVICE WORKER REGISTRATION
+   SERVICE WORKER
 ════════════════════════════════════════════════════ */
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/pwa/sw.js', { scope: '/' }).catch(console.warn);
 }
 
-/* ════════════════════════════════════════════════════
-   BOOT
-════════════════════════════════════════════════════ */
 boot();
 </script>
 </body>
