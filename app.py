@@ -18,7 +18,11 @@ HIGH_MULT_CLASSES      = {2, 3, 4, 7}
 
 # EV multipliers for bonus inclusion
 HIGH_MULT_EV        = {2: 10, 3: 19, 4: 13, 7: 30}
-HIGH_MULT_EV_TARGET = 1.5   # raised 1.0→1.5: prob * multiplier >= 1.5 qualifies (stricter bonus)
+HIGH_MULT_EV_TARGET = 0.8   # lowered: high-mult classes are rare, 0.8 still EV-positive
+
+# Minimum score floor for high-mult classes — prevents rarity from suppressing them to zero
+# Based on approximate real frequencies: 2≈8%, 4≈6%, 3≈4%, 7≈2%
+HIGH_MULT_EV_FLOOR = {2: 0.055, 3: 0.030, 4: 0.045, 7: 0.018}
 
 # Entropy adaptation targets — raised to reduce over-skipping
 TARGET_PLAY_MIN  = 0.50     # was 0.38
@@ -46,7 +50,7 @@ FETCH_HEADERS = {
 
 # ── PATTERN DETECTION CONFIG ──────────────────────────────────────────────────
 PATTERN_BASE_WEIGHTS = {
-    7: 1.5, 3: 1.5, 4: 1.5, 2: 1.5,
+    7: 1.5, 3: 2.5, 4: 2, 2: 3,
     1: 1.0, 5: 1.0, 6: 1.0, 8: 1.0,
 }
 
@@ -194,10 +198,10 @@ PLAY_HISTORY_MAX = 30
 
 # ── RECENT MISS SUPPRESSION CONFIG ───────────────────────────────────────────
 MISS_SUPPRESS_WINDOW    = 3
-MISS_SUPPRESS_PENALTY   = 0.25
+MISS_SUPPRESS_PENALTY   = 0.15
 NOISE_WINDOW            = 7
 NOISE_UNIQUE_THRESH     = 5
-NOISE_SCORE_FLATTEN     = 0.35
+NOISE_SCORE_FLATTEN     = 0.25
 
 
 # ── DAILY RESET ───────────────────────────────────────────────────────────────
@@ -681,7 +685,8 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar):
                 miss_classes.add(e["pred2"])
             for cls in miss_classes:
                 if cls in sc:
-                    sc[cls] *= (1.0 - MISS_SUPPRESS_PENALTY)
+                    penalty = MISS_SUPPRESS_PENALTY * 0.2 if cls in HIGH_MULT_CLASSES else MISS_SUPPRESS_PENALTY
+                    sc[cls] *= (1.0 - penalty)
 
         if len(ph) >= 3:
             last3_pred1 = [e["pred1"] for e in ph[-3:]]
@@ -700,6 +705,16 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar):
 
     ts = sum(sc.values()) or 1.0
     sc = {k: v / ts for k, v in sc.items()}
+
+    # ── HIGH-MULT FLOOR: ensure 2,3,4,7 always get minimum representation ────
+    floor_applied = False
+    for cls, floor_val in HIGH_MULT_EV_FLOOR.items():
+        if sc.get(cls, 0.0) < floor_val:
+            sc[cls] = floor_val
+            floor_applied = True
+    if floor_applied:
+        ts = sum(sc.values()) or 1.0
+        sc = {k: v / ts for k, v in sc.items()}
     # ─────────────────────────────────────────────────────────────────────────
 
     rk=sorted(sc.items(),key=lambda x:-x[1])
