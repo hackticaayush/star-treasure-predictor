@@ -106,17 +106,20 @@ MARKOV_WEIGHT_MAX    = 0.40
 MARKOV_WEIGHT_STEP   = 0.015
 
 # ── DYNAMIC BONUS THRESHOLD CONFIG ───────────────────────────────────────────
-BONUS_CONF_THRESH_DEFAULT = 0.15   # raised 0.10→0.15: need stronger confidence for bonus
-BONUS_CONF_THRESH_MIN     = 0.11   # raised 0.06→0.11: floor is higher
-BONUS_CONF_THRESH_MAX     = 0.22   # raised 0.18→0.22
+BONUS_CONF_THRESH_DEFAULT = 0.15
+BONUS_CONF_THRESH_MIN     = 0.11
+BONUS_CONF_THRESH_MAX     = 0.22
 BONUS_CONF_THRESH_STEP    = 0.005
 BONUS_EVAL_WINDOW         = 40
 
 # ── PER-CLASS BONUS MISS SUPPRESSION CONFIG ───────────────────────────────────
-# If a bonus class misses N consecutive times it was suggested as bonus,
-# suppress it from bonus picks until it hits at least once.
-BONUS_CLASS_MISS_WINDOW   = 4    # consecutive bonus-specific misses before suppression
-BONUS_CLASS_SUPPRESS_MULT = 0.0  # multiply EV score by this when suppressed (0 = fully block)
+BONUS_CLASS_MISS_WINDOW   = 4
+BONUS_CLASS_SUPPRESS_MULT = 0.0
+
+# ── ENTROPY SKIP PENALTY CONFIG ───────────────────────────────────────────────
+ENTROPY_SKIP_GRACE      = 3     # free consecutive entropy-skips before penalty kicks in
+ENTROPY_SKIP_PENALTY    = 0.04  # entropy reduction per extra skip beyond grace
+ENTROPY_SKIP_MAX_FORCE  = 0.40  # cap total penalty
 
 # ── GLOBAL STATE ──────────────────────────────────────────────────────────────
 _lock              = threading.Lock()
@@ -138,6 +141,11 @@ _fetch_status = {
     "last_error":   None, "total_fetched": 0,
     "status": "starting", "last_reset": None,
 }
+
+# ── ENTROPY SKIP STREAK STATE ─────────────────────────────────────────────────
+# Counts rounds skipped *specifically* due to high entropy (not brake/low-conf).
+# Resets to 0 the moment a round is played.
+_consec_entropy_skips = 0
 
 # ── PATTERN STATE ─────────────────────────────────────────────────────────────
 _hit_pattern_scores  = {g: [] for g in PATTERN_GROUPS}
@@ -168,25 +176,19 @@ _dynamic_markov_w = {
     "wm3": 0.28,
     "wm4": 0.22,
     "wr":  0.08,
-    "wv":  0.04,   # reduced 0.10→0.04: short-term freq was dominating, causing lock
+    "wv":  0.04,
     "wo":  0.03,
 }
 
 # ── DYNAMIC BONUS THRESHOLD STATE ────────────────────────────────────────────
 _dynamic_bonus_thresh  = BONUS_CONF_THRESH_DEFAULT
-# FIX 1: bonus_eval_log now tracks (bonus_triggered, bonus_hit) where bonus_hit=True
-#         ONLY when actual matched a bonus pick specifically, not just any pred.
 _bonus_eval_log        = []
 
 # ── PER-CLASS BONUS MISS STATE ────────────────────────────────────────────────
-# Tracks consecutive bonus-specific misses per high-mult class.
-# Key: class index (2,3,4,7). Value: list of bools (True=bonus hit, False=bonus miss)
-# for rounds where that class was suggested as a bonus pick.
-_bonus_class_results   = {cls: [] for cls in HIGH_MULT_CLASSES}  # recent True/False per class
-BONUS_CLASS_BUF_MAX    = 20   # keep last 20 bonus appearances per class
+_bonus_class_results   = {cls: [] for cls in HIGH_MULT_CLASSES}
+BONUS_CLASS_BUF_MAX    = 20
 
-# ── RECENT PLAY HISTORY STATE (for miss suppression & noise detection) ────────
-# Stores (pred1, pred2, actual, hit) for each PLAY round in order
+# ── RECENT PLAY HISTORY STATE ─────────────────────────────────────────────────
 _play_history: list = []
 PLAY_HISTORY_MAX = 30
 
@@ -212,7 +214,7 @@ def _do_reset():
     global _dynamic_brake_trigger, _dynamic_brake_pause
     global _dynamic_train_rounds, _top1_threshold
     global _dynamic_lookback, _dynamic_decay, _dynamic_boost_max, _dynamic_boost_min
-    global _dynamic_bonus_thresh
+    global _dynamic_bonus_thresh, _consec_entropy_skips
     now_ist = datetime.now(IST)
     print(f"[Reset] 5:30 AM IST — wiping data ({now_ist.date()})")
     if os.path.exists(DATA_FILE):
@@ -235,7 +237,6 @@ def _do_reset():
         _bonus_eval_log.clear()
         for o in _markov_hit_buf: _markov_hit_buf[o].clear()
         _play_history.clear()
-        # Reset per-class bonus miss counters
         for cls in HIGH_MULT_CLASSES:
             _bonus_class_results[cls].clear()
     _dynamic_brake_trigger = BRAKE_TRIGGER_DEFAULT
@@ -247,6 +248,7 @@ def _do_reset():
     _dynamic_boost_max     = PATTERN_BOOST_MAX_DEFAULT
     _dynamic_boost_min     = PATTERN_BOOST_MIN_DEFAULT
     _dynamic_bonus_thresh  = BONUS_CONF_THRESH_DEFAULT
+    _consec_entropy_skips  = 0
     _last_reset_date = now_ist.date()
     print("[Reset] All data cleared.")
 
@@ -412,12 +414,6 @@ def recalibrate_boost_cap(boost_eval_log):
 
 # ── DYNAMIC BONUS THRESHOLD ───────────────────────────────────────────────────
 def recalibrate_bonus_thresh(bonus_eval_log):
-    """
-    FIX 1: bonus_eval_log entries are (bonus_triggered, bonus_hit) where
-    bonus_hit is True ONLY when actual matched a bonus pick specifically.
-    This gives accurate signal — the threshold now rises/falls based on
-    whether bonus picks themselves are hitting, not base predictions.
-    """
     global _dynamic_bonus_thresh
     if len(bonus_eval_log) < 15:
         return
@@ -444,29 +440,17 @@ def recalibrate_bonus_thresh(bonus_eval_log):
 
 # ── PER-CLASS BONUS MISS TRACKER ──────────────────────────────────────────────
 def _get_suppressed_bonus_classes():
-    """
-    FIX 3: Returns the set of bonus classes that are currently suppressed
-    due to BONUS_CLASS_MISS_WINDOW consecutive bonus-specific misses.
-    A class is suppressed if its last N appearances as a bonus pick all missed.
-    It gets unsuppressed the moment it hits once.
-    """
     suppressed = set()
     with _lock:
         for cls in HIGH_MULT_CLASSES:
             buf = _bonus_class_results[cls]
             if len(buf) >= BONUS_CLASS_MISS_WINDOW:
-                # Check last N entries — if ALL are False (miss), suppress
                 last_n = buf[-BONUS_CLASS_MISS_WINDOW:]
                 if not any(last_n):
                     suppressed.add(cls)
     return suppressed
 
 def _record_bonus_class_result(bonus_picks, actual_val):
-    """
-    FIX 3: Called after a PLAY round resolves. For each class that was
-    suggested as a bonus pick, record whether it specifically hit (actual==cls)
-    or missed. Does NOT record anything for classes not in bonus_picks.
-    """
     if not bonus_picks:
         return
     with _lock:
@@ -594,6 +578,26 @@ def recalibrate_top1_threshold(play_pct):
         print(f"[Adaptive] Top1Thresh: {cur:.4f}→{new:.4f} (play%={play_pct*100:.1f}%)")
         _top1_threshold = new
 
+# ── ENTROPY SKIP PENALTY HELPERS ──────────────────────────────────────────────
+def _compute_entropy_penalty():
+    """Returns current entropy penalty based on consecutive entropy-skip streak."""
+    return min(
+        ENTROPY_SKIP_MAX_FORCE,
+        max(0, _consec_entropy_skips - ENTROPY_SKIP_GRACE) * ENTROPY_SKIP_PENALTY
+    )
+
+def _is_penalty_forced(ent):
+    """
+    Returns True when the play decision is only passing because of the
+    entropy penalty — i.e. raw entropy is above the threshold but effective
+    entropy is below it. This signals lower confidence → use top-3 picks.
+    """
+    penalty = _compute_entropy_penalty()
+    if penalty <= 0:
+        return False
+    effective_ent = ent - penalty
+    return ent >= _entropy_threshold and effective_ent < _entropy_threshold
+
 # ── SCORE ROUND ───────────────────────────────────────────────────────────────
 def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar):
     n=len(h)
@@ -705,24 +709,28 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar):
     return [rk[0][0],rk[1][0]],sc,ent,rk[0][1],rk[1][1],t3s,t3c,markov_preds
 
 def should_play(t1, ent, brake_active=False):
-    if brake_active: return False
+    if brake_active:
+        return False
     with _lock:
         top1_t = _top1_threshold
-    return t1 > top1_t and ent < _entropy_threshold
+    # Low confidence never counts toward entropy-skip streak
+    if t1 <= top1_t:
+        return False
+    # Apply escalating entropy penalty for long entropy-skip streaks
+    penalty = _compute_entropy_penalty()
+    effective_ent = ent - penalty
+    if penalty > 0:
+        print(f"[EntropyPenalty] streak={_consec_entropy_skips} "
+              f"penalty={penalty:.3f} ent={ent:.4f}→{effective_ent:.4f}")
+    return effective_ent < _entropy_threshold
 
 # ── BONUS PICK LOGIC ──────────────────────────────────────────────────────────
 def get_bonus_picks(scores, top2):
-    """
-    FIX 3: Per-class suppression applied here.
-    Classes with BONUS_CLASS_MISS_WINDOW consecutive bonus-specific misses
-    are excluded from bonus suggestions until they hit at least once.
-    """
     with _lock:
         thresh = _dynamic_bonus_thresh
 
     sc_map  = {int(k): float(v) for k, v in scores.items()}
 
-    # Get currently suppressed bonus classes
     suppressed = _get_suppressed_bonus_classes()
     if suppressed:
         print(f"[BonusSuppress] Currently suppressed classes: "
@@ -730,7 +738,6 @@ def get_bonus_picks(scores, top2):
 
     qualifying = set()
     for cls in HIGH_MULT_CLASSES:
-        # Skip suppressed classes entirely
         if cls in suppressed:
             continue
         prob = sc_map.get(cls, 0.0)
@@ -801,7 +808,6 @@ def _run_sim(rewards):
         sim_boost_log.append((any_triggered, hit))
         bonus = get_bonus_picks(sc, top2)
         bonus_triggered = bonus is not None
-        # FIX 1 (sim): bonus_hit = actual matched a bonus pick specifically
         bonus_hit = (bonus is not None and tn in bonus)
         sim_bonus_log.append((bonus_triggered, bonus_hit))
         if hit:
@@ -847,20 +853,40 @@ def _build_cached_pred(rewards, raw_rounds, brake):
     stats = build_global_stats(rewards)
     top2, scores, ent, t1s, t2s, t3s, t3c, _ = score_round(rewards, *stats)
     eth = _entropy_threshold
-    play = t1s > cur_top1_t and ent < eth and brake == 0
+
+    # Compute penalty and effective entropy
+    penalty       = _compute_entropy_penalty()
+    effective_ent = ent - penalty
+    penalty_forced = (penalty > 0 and ent >= eth and effective_ent < eth)
+
+    play = t1s > cur_top1_t and effective_ent < eth and brake == 0
+
     skip_reason = None
     if brake > 0:              skip_reason = f"Loss brake ({brake} rounds left)"
-    elif ent >= eth:           skip_reason = f"High entropy ({ent:.4f} ≥ {eth:.3f})"
+    elif ent >= eth:
+        if penalty_forced:
+            # Penalty pushed it to play — no skip_reason
+            pass
+        else:
+            skip_reason = f"High entropy ({ent:.4f} ≥ {eth:.3f})"
     elif t1s <= cur_top1_t:    skip_reason = f"Low confidence ({t1s:.4f} ≤ {cur_top1_t:.4f})"
+
     last_round = raw_rounds[-1]["round"] if raw_rounds else None
     next_round = (last_round + 1) if last_round else None
     SMALL_MULT = {1, 5, 6, 8}
     pred3       = None
     pred3_conf  = None
+
+    # Include pred3 if:
+    # (a) normal top-3 condition (top2 are small-mult and scores are close), OR
+    # (b) this play was penalty-forced (model is less confident, widen the net)
     top2_are_small = all(c in SMALL_MULT for c in top2)
-    if (play and top2_are_small and t3c is not None and (t2s - t3s) <= 0.01):
-        pred3      = t3c
-        pred3_conf = round(t3s * 100, 2)
+    normal_top3_condition = (play and top2_are_small and t3c is not None
+                             and (t2s - t3s) <= 0.01)
+    if play and (normal_top3_condition or penalty_forced):
+        if t3c is not None:
+            pred3      = t3c
+            pred3_conf = round(t3s * 100, 2)
 
     bonus_picks = get_bonus_picks(scores, top2)
 
@@ -897,8 +923,12 @@ def _build_cached_pred(rewards, raw_rounds, brake):
                 "boost_applied": info.get("boost_applied", 0.0),
             }
 
-    # Expose current suppression state for UI/debugging
     suppressed_classes = list(_get_suppressed_bonus_classes())
+
+    # Build top3 list — always 3 items when penalty_forced (pred3 guaranteed above)
+    top3 = [top2[0], top2[1]]
+    if pred3 is not None:
+        top3.append(pred3)
 
     return {
         "next_round":         next_round,   "latest_round":  last_round,
@@ -914,6 +944,10 @@ def _build_cached_pred(rewards, raw_rounds, brake):
         "pred2_conf":         round(t2s*100,2),
         "pred3_conf":         pred3_conf,
         "entropy":            round(ent,4),
+        "effective_entropy":  round(effective_ent, 4),
+        "entropy_penalty":    round(penalty, 4),
+        "penalty_forced":     penalty_forced,
+        "consec_entropy_skips": _consec_entropy_skips,
         "action":             "PLAY" if play else "SKIP",
         "skip_reason":        skip_reason,
         "bonus_picks":        bonus_details,
@@ -936,7 +970,7 @@ def _build_cached_pred(rewards, raw_rounds, brake):
         "suppressed_bonus_classes": suppressed_classes,
         "_play":              play,
         "_top2":              list(top2),
-        "_top3":              ([top2[0], top2[1], pred3] if pred3 else list(top2)),
+        "_top3":              top3,
         "_bonus_picks":       list(bonus_picks) if bonus_picks else None,
         "_bonus_triggered":   bonus_picks is not None,
         "_next_round":        next_round,
@@ -944,6 +978,7 @@ def _build_cached_pred(rewards, raw_rounds, brake):
                                for g in PATTERN_GROUPS},
         "_any_boosted":       pattern_snap.get("_any_triggered", False),
         "_t1s":               t1s,
+        "_penalty_forced":    penalty_forced,
     }
 
 # ── FETCHER LOOP ──────────────────────────────────────────────────────────────
@@ -954,6 +989,7 @@ def fetcher_loop():
     global _dynamic_boost_max, _dynamic_boost_min
     global _dynamic_bonus_thresh
     global _skip_pending_pred
+    global _consec_entropy_skips
 
     while True:
         try:
@@ -997,7 +1033,6 @@ def fetcher_loop():
                             for group_name, pscore in pending["pattern_scores"].items():
                                 update_pattern_hit(group_name, pscore)
 
-                        # FIX 3: Record per-class bonus result (bonus-specific hit/miss only)
                         _record_bonus_class_result(pending.get("bonus_picks"), actual_val)
 
                         with _lock:
@@ -1022,7 +1057,6 @@ def fetcher_loop():
                             boost_log_snap = list(_boost_eval_log)
                         recalibrate_boost_cap(boost_log_snap)
 
-                        # FIX 1: bonus_hit = actual matched a bonus pick specifically
                         bonus_picks_pending = pending.get("bonus_picks")
                         bonus_hit = (
                             bonus_picks_pending is not None and
@@ -1050,6 +1084,7 @@ def fetcher_loop():
                             "top3":  pending.get("top3"),
                             "bonus_picks": pending.get("bonus_picks"),
                             "actual": actual_val, "hit": hit, "action": "PLAY",
+                            "penalty_forced": pending.get("penalty_forced", False),
                         }
                         with _lock:
                             _live_log.append(entry)
@@ -1065,7 +1100,8 @@ def fetcher_loop():
                         pending = None
                         print(f"[Live] #{pred_round}: pred={entry['top2']} "
                               f"actual={actual_val} → {'HIT ✓' if hit else 'MISS ✗'} "
-                              f"bonus_hit={bonus_hit}")
+                              f"bonus_hit={bonus_hit} "
+                              f"penalty_forced={entry['penalty_forced']}")
                     elif records and pred_round <= records[-1]["round"]:
                         with _lock:
                             _pending_pred = None
@@ -1146,6 +1182,30 @@ def fetcher_loop():
                     _sim_stats.clear(); _sim_stats.update(sim_dict)
                     _brake_left = brake
                 cached = _build_cached_pred(rewards, records, brake)
+
+                # ── Update consecutive entropy-skip counter ───────────────────
+                if cached is not None:
+                    if cached["action"] == "PLAY":
+                        # Played (including penalty-forced plays) — reset streak
+                        if _consec_entropy_skips > 0:
+                            print(f"[EntropySkip] Streak reset after {_consec_entropy_skips} "
+                                  f"consecutive entropy-skips "
+                                  f"(penalty_forced={cached['penalty_forced']})")
+                        _consec_entropy_skips = 0
+                    elif (cached.get("skip_reason", "") or "").startswith("High entropy"):
+                        # Pure entropy skip — increment streak
+                        _consec_entropy_skips += 1
+                        extra = _consec_entropy_skips - ENTROPY_SKIP_GRACE
+                        if extra > 0:
+                            next_penalty = min(ENTROPY_SKIP_MAX_FORCE,
+                                               extra * ENTROPY_SKIP_PENALTY)
+                            print(f"[EntropySkip] streak={_consec_entropy_skips} "
+                                  f"next_penalty={next_penalty:.3f} "
+                                  f"(effective threshold will be "
+                                  f"{_entropy_threshold - next_penalty:.4f})")
+                    # Brake or low-confidence skip — don't touch the counter
+                # ─────────────────────────────────────────────────────────────
+
                 with _lock:
                     _cached_pred = cached
                 if cached and cached["_next_round"] is not None:
@@ -1166,10 +1226,13 @@ def fetcher_loop():
                                 "any_boosted":     cached.get("_any_boosted", False),
                                 "t1s":             cached.get("_t1s", 0.25),
                                 "markov_preds":    mp,
+                                "penalty_forced":  cached.get("_penalty_forced", False),
                             }
                             with _lock:
                                 _pending_pred = np_
                             print(f"[Fetcher] Pending → #{nr} top2={cached['_top2']} "
+                                  f"top3={cached['_top3']} "
+                                  f"penalty_forced={cached.get('_penalty_forced',False)} "
                                   f"trigger={cached['brake_trigger']} "
                                   f"pause={cached['brake_pause']} "
                                   f"top1_t={cached['top1_threshold']} "
@@ -1254,6 +1317,7 @@ def api_stats():
         dyn_dc    = _dynamic_decay
         ph_snap   = list(_play_history)
         bcr_snap  = {cls: list(v) for cls, v in _bonus_class_results.items()}
+        ces       = _consec_entropy_skips
     cur = 0; mx_live = 0
     for e in reversed(live):
         if not e["hit"]: cur += 1; mx_live = max(mx_live, cur)
@@ -1280,6 +1344,8 @@ def api_stats():
     stats["pattern_boost_max"]   = round(dyn_bmax, 4)
     stats["pattern_lookback"]    = dyn_lk
     stats["pattern_decay"]       = round(dyn_dc, 4)
+    stats["consec_entropy_skips"] = ces
+    stats["entropy_skip_penalty"] = round(_compute_entropy_penalty(), 4)
     # Miss suppression / noise state summary
     recent3 = ph_snap[-3:] if ph_snap else []
     stats["play_history_len"]    = len(ph_snap)
@@ -1313,15 +1379,18 @@ def api_status():
         dyn_bp = _dynamic_brake_pause
         top1_t = _top1_threshold
         dyn_tr = _dynamic_train_rounds
+        ces    = _consec_entropy_skips
     now_ist = datetime.now(IST)
-    fs["total_rounds"]      = total
-    fs["latest_round"]      = latest
-    fs["server_time_ist"]   = now_ist.strftime("%H:%M:%S IST")
-    fs["entropy_threshold"] = round(_entropy_threshold, 3)
-    fs["top1_threshold"]    = round(top1_t, 4)
-    fs["brake_trigger"]     = dyn_bt
-    fs["brake_pause"]       = dyn_bp
-    fs["train_rounds"]      = dyn_tr
+    fs["total_rounds"]        = total
+    fs["latest_round"]        = latest
+    fs["server_time_ist"]     = now_ist.strftime("%H:%M:%S IST")
+    fs["entropy_threshold"]   = round(_entropy_threshold, 3)
+    fs["top1_threshold"]      = round(top1_t, 4)
+    fs["brake_trigger"]       = dyn_bt
+    fs["brake_pause"]         = dyn_bp
+    fs["train_rounds"]        = dyn_tr
+    fs["consec_entropy_skips"] = ces
+    fs["entropy_skip_penalty"] = round(_compute_entropy_penalty(), 4)
     reset_today = now_ist.replace(hour=RESET_HOUR_IST, minute=RESET_MINUTE_IST,
                                   second=0, microsecond=0)
     from datetime import timedelta
@@ -1402,6 +1471,7 @@ def api_brake():
 def api_adaptive():
     with _lock:
         suppressed = list(_get_suppressed_bonus_classes())
+        ces        = _consec_entropy_skips
         return jsonify({
             "entropy_threshold":   {"value": round(_entropy_threshold, 4),
                                     "min": ENT_THRESH_MIN, "max": ENT_THRESH_MAX},
@@ -1432,15 +1502,24 @@ def api_adaptive():
                 "suppressed":  suppressed,
                 "suppressed_names": [CLASS_NAMES.get(c, str(c)) for c in suppressed],
             },
+            "entropy_skip_streak": {
+                "current":      ces,
+                "grace":        ENTROPY_SKIP_GRACE,
+                "penalty_step": ENTROPY_SKIP_PENALTY,
+                "max_force":    ENTROPY_SKIP_MAX_FORCE,
+                "current_penalty": round(_compute_entropy_penalty(), 4),
+                "effective_threshold": round(_entropy_threshold - _compute_entropy_penalty(), 4),
+            },
         })
 
 # ── STARTUP ───────────────────────────────────────────────────────────────────
 def startup():
     global _last_reset_date, _pending_pred, _cached_pred, _entropy_threshold, _brake_left
     global _dynamic_brake_trigger, _dynamic_brake_pause, _dynamic_train_rounds
-    global _skip_pending_pred
+    global _skip_pending_pred, _consec_entropy_skips
 
-    _skip_pending_pred = None
+    _skip_pending_pred    = None
+    _consec_entropy_skips = 0
 
     now_ist  = datetime.now(IST)
     past_530 = (now_ist.hour > RESET_HOUR_IST or
@@ -1509,9 +1588,12 @@ def startup():
                 "any_boosted":     cached.get("_any_boosted", False),
                 "t1s":             cached.get("_t1s", 0.25),
                 "markov_preds":    mp,
+                "penalty_forced":  cached.get("_penalty_forced", False),
             }
             print(f"[Startup] Pending → #{_pending_pred['round']} "
-                  f"top2={_pending_pred['top2']}")
+                  f"top2={_pending_pred['top2']} "
+                  f"top3={_pending_pred['top3']} "
+                  f"penalty_forced={_pending_pred['penalty_forced']}")
         elif cached and not cached["_play"] and cached["_next_round"] is not None:
             _skip_pending_pred = {
                 "round":       cached["_next_round"],
