@@ -9,7 +9,7 @@ app = Flask(__name__)
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 DATA_FILE              = "round_data.json"
 SKIP_TOP1_THRESHOLD    = 0.180
-SKIP_ENTROPY_THRESHOLD = 2.95       # raised: 2.70 → 2.80
+SKIP_ENTROPY_THRESHOLD = 2.85       # raised: 2.70 → 2.80
 BRAKE_TRIGGER          = 2
 BRAKE_PAUSE            = 2
 POLL_INTERVAL          = 5
@@ -21,10 +21,10 @@ HIGH_MULT_EV        = {2: 10, 3: 19, 4: 13, 7: 30}
 HIGH_MULT_EV_TARGET = 1.5   # raised 1.0→1.5: prob * multiplier >= 1.5 qualifies (stricter bonus)
 
 # Entropy adaptation targets — raised to reduce over-skipping
-TARGET_PLAY_MIN  = 0.55     # was 0.38
-TARGET_PLAY_MAX  = 0.65     # was 0.45
+TARGET_PLAY_MIN  = 0.50     # was 0.38
+TARGET_PLAY_MAX  = 0.55     # was 0.45
 ENT_THRESH_MIN   = 2.70
-ENT_THRESH_MAX   = 3.15     # was 2.90
+ENT_THRESH_MAX   = 3.05     # was 2.90
 
 TOP1_THRESH_MIN  = 0.150
 TOP1_THRESH_MAX  = 0.260
@@ -1025,8 +1025,8 @@ def fetcher_loop():
                           f"(total_rounds={total_rounds})")
                     _dynamic_train_rounds = new_tr
                 cur = _entropy_threshold
-                if play_pct < TARGET_PLAY_MIN:   new_eth = min(ENT_THRESH_MAX, cur + 0.05)
-                elif play_pct > TARGET_PLAY_MAX: new_eth = max(ENT_THRESH_MIN, cur - 0.05)
+                if play_pct < TARGET_PLAY_MIN:   new_eth = min(ENT_THRESH_MAX, cur + 0.04)
+                elif play_pct > TARGET_PLAY_MAX: new_eth = max(ENT_THRESH_MIN, cur - 0.04)
                 else:                            new_eth = cur
                 if abs(new_eth - cur) > 0.001:
                     print(f"[Adaptive] Entropy: {cur:.3f}→{new_eth:.3f} "
