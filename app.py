@@ -17,8 +17,8 @@ POLL_INTERVAL          = 5
 HIGH_MULT_CLASSES      = {2, 3, 4, 7}
 
 # EV multipliers for bonus inclusion
-HIGH_MULT_EV        = {2: 9, 3: 20, 4: 13, 7: 25}
-HIGH_MULT_EV_TARGET = 1.0   # prob * multiplier >= 1.0 qualifies
+HIGH_MULT_EV        = {2: 10, 3: 19, 4: 13, 7: 30}
+HIGH_MULT_EV_TARGET = 1.5   # raised 1.0→1.5: prob * multiplier >= 1.5 qualifies (stricter bonus)
 
 # Entropy adaptation targets — raised to reduce over-skipping
 TARGET_PLAY_MIN  = 0.45     # was 0.38
@@ -46,7 +46,7 @@ FETCH_HEADERS = {
 
 # ── PATTERN DETECTION CONFIG ──────────────────────────────────────────────────
 PATTERN_BASE_WEIGHTS = {
-    7: 3.0, 3: 2.0, 4: 1.5, 2: 1.0,
+    7: 2.5, 3: 2.0, 4: 1.5, 2: 1.0,
     1: 1.0, 5: 1.0, 6: 1.0, 8: 1.0,
 }
 
@@ -106,9 +106,9 @@ MARKOV_WEIGHT_MAX    = 0.40
 MARKOV_WEIGHT_STEP   = 0.015
 
 # ── DYNAMIC BONUS THRESHOLD CONFIG ───────────────────────────────────────────
-BONUS_CONF_THRESH_DEFAULT = 0.10
-BONUS_CONF_THRESH_MIN     = 0.06
-BONUS_CONF_THRESH_MAX     = 0.18
+BONUS_CONF_THRESH_DEFAULT = 0.15   # raised 0.10→0.15: need stronger confidence for bonus
+BONUS_CONF_THRESH_MIN     = 0.11   # raised 0.06→0.11: floor is higher
+BONUS_CONF_THRESH_MAX     = 0.22   # raised 0.18→0.22
 BONUS_CONF_THRESH_STEP    = 0.005
 BONUS_EVAL_WINDOW         = 40
 
@@ -157,18 +157,33 @@ _dynamic_train_rounds  = TRAIN_ROUNDS_DEFAULT
 _markov_hit_buf = {1: [], 2: [], 3: [], 4: []}
 _dynamic_markov_w = {
     "wb":  0.05,
-    "wm1": 0.10,
-    "wm2": 0.15,
-    "wm3": 0.25,
-    "wm4": 0.20,
-    "wr":  0.10,
-    "wv":  0.10,
-    "wo":  0.05,
+    "wm1": 0.12,
+    "wm2": 0.18,
+    "wm3": 0.28,
+    "wm4": 0.22,
+    "wr":  0.08,
+    "wv":  0.04,   # reduced 0.10→0.04: short-term freq was dominating, causing lock
+    "wo":  0.03,
 }
 
 # ── DYNAMIC BONUS THRESHOLD STATE ────────────────────────────────────────────
 _dynamic_bonus_thresh  = BONUS_CONF_THRESH_DEFAULT
 _bonus_eval_log        = []
+
+# ── RECENT PLAY HISTORY STATE (for miss suppression & noise detection) ────────
+# Stores (pred1, pred2, actual, hit) for each PLAY round in order
+_play_history: list = []
+PLAY_HISTORY_MAX = 30
+
+# ── RECENT MISS SUPPRESSION CONFIG ───────────────────────────────────────────
+# If the same class has been pred1 for N consecutive played rounds and all missed,
+# apply a score penalty to break prediction lock.
+MISS_SUPPRESS_WINDOW    = 3      # consecutive play-round misses before suppression kicks in
+MISS_SUPPRESS_PENALTY   = 0.25   # multiply score by (1 - penalty) for each locked-miss class
+# Short recent history used to detect noise vs pattern (last N actual outcomes)
+NOISE_WINDOW            = 7      # look at last 7 played rounds' actual outcomes
+NOISE_UNIQUE_THRESH     = 5      # if >=5 unique classes in last 7 actuals → high noise mode
+NOISE_SCORE_FLATTEN     = 0.35   # in noise mode, blend scores toward uniform by this fraction
 
 
 # ── DAILY RESET ───────────────────────────────────────────────────────────────
@@ -207,6 +222,7 @@ def _do_reset():
         _brake_loss_confs.clear()
         _bonus_eval_log.clear()
         for o in _markov_hit_buf: _markov_hit_buf[o].clear()
+        _play_history.clear()   # clear miss suppression history
     _dynamic_brake_trigger = BRAKE_TRIGGER_DEFAULT
     _dynamic_brake_pause   = BRAKE_PAUSE_DEFAULT
     _dynamic_train_rounds  = TRAIN_ROUNDS_DEFAULT
@@ -590,6 +606,51 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar):
     # suppressing all classes unevenly and locking the model onto one class.
     # ──────────────────────────────────────────────────────────────────────────
 
+    # ── RECENT MISS SUPPRESSION & NOISE ADAPTATION ───────────────────────────
+    # Uses _play_history (play rounds only) to:
+    #   1. Suppress classes that have been stuck as pred1 and keep missing
+    #   2. Flatten scores when recent actuals are highly random (noise mode)
+    #   3. Break prediction lock when same pred1 repeats too many times
+    with _lock:
+        ph = list(_play_history)
+
+    if ph:
+        # --- 1. Miss suppression: penalise classes that keep being predicted but miss ---
+        # Look at last MISS_SUPPRESS_WINDOW play rounds
+        recent_ph = ph[-MISS_SUPPRESS_WINDOW:]
+        if len(recent_ph) == MISS_SUPPRESS_WINDOW and not any(e["hit"] for e in recent_ph):
+            # All recent played rounds were misses — penalise the repeated pred classes
+            miss_classes = set()
+            for e in recent_ph:
+                miss_classes.add(e["pred1"])
+                miss_classes.add(e["pred2"])
+            for cls in miss_classes:
+                if cls in sc:
+                    sc[cls] *= (1.0 - MISS_SUPPRESS_PENALTY)
+
+        # --- 2. Prediction lock-break: same pred1 N times in a row → penalise it ---
+        if len(ph) >= 3:
+            last3_pred1 = [e["pred1"] for e in ph[-3:]]
+            if len(set(last3_pred1)) == 1:  # all same pred1
+                locked_cls = last3_pred1[0]
+                if locked_cls in sc:
+                    sc[locked_cls] *= 0.70  # 30% penalty to break the lock
+
+        # --- 3. Noise detection: if recent actuals are very diverse, flatten scores ---
+        recent_actuals = [e["actual"] for e in ph[-NOISE_WINDOW:] if "actual" in e]
+        if len(recent_actuals) >= NOISE_WINDOW:
+            unique_count = len(set(recent_actuals))
+            if unique_count >= NOISE_UNIQUE_THRESH:
+                # High noise — blend toward uniform distribution
+                uniform = 1.0 / 8.0
+                for cls in sc:
+                    sc[cls] = sc[cls] * (1.0 - NOISE_SCORE_FLATTEN) + uniform * NOISE_SCORE_FLATTEN
+
+    # Re-normalise after suppression/noise adjustments
+    ts = sum(sc.values()) or 1.0
+    sc = {k: v / ts for k, v in sc.items()}
+    # ─────────────────────────────────────────────────────────────────────────
+
     rk=sorted(sc.items(),key=lambda x:-x[1])
     ent=-sum(v*math.log2(v) for v in sc.values() if v>0)
     t3s = rk[2][1] if len(rk) >= 3 else 0.0
@@ -914,6 +975,15 @@ def fetcher_loop():
                         with _lock:
                             _live_log.append(entry)
                             _pending_pred = None
+                            # Update play history for miss suppression / noise detection
+                            _play_history.append({
+                                "pred1":  pending["top2"][0],
+                                "pred2":  pending["top2"][1],
+                                "actual": actual_val,
+                                "hit":    hit,
+                            })
+                            if len(_play_history) > PLAY_HISTORY_MAX:
+                                _play_history.pop(0)
                         pending = None
                         print(f"[Live] #{pred_round}: pred={entry['top2']} "
                               f"actual={actual_val} → {'HIT ✓' if hit else 'MISS ✗'}")
@@ -1106,6 +1176,7 @@ def api_stats():
         dyn_bmax  = _dynamic_boost_max
         dyn_lk    = _dynamic_lookback
         dyn_dc    = _dynamic_decay
+        ph_snap   = list(_play_history)
     cur = 0; mx_live = 0
     for e in reversed(live):
         if not e["hit"]: cur += 1; mx_live = max(mx_live, cur)
@@ -1132,6 +1203,14 @@ def api_stats():
     stats["pattern_boost_max"]   = round(dyn_bmax, 4)
     stats["pattern_lookback"]    = dyn_lk
     stats["pattern_decay"]       = round(dyn_dc, 4)
+    # Miss suppression / noise state summary
+    recent3 = ph_snap[-3:] if ph_snap else []
+    stats["play_history_len"]    = len(ph_snap)
+    stats["recent_pred1_lock"]   = (len(set(e["pred1"] for e in recent3)) == 1 and len(recent3) == 3)
+    stats["recent_all_miss"]     = (len(recent3) == MISS_SUPPRESS_WINDOW and not any(e["hit"] for e in recent3))
+    recent_actuals = [e["actual"] for e in ph_snap[-NOISE_WINDOW:] if "actual" in e]
+    stats["noise_mode"]          = (len(recent_actuals) >= NOISE_WINDOW and
+                                    len(set(recent_actuals)) >= NOISE_UNIQUE_THRESH)
     return jsonify(stats)
 
 @app.route("/api/status")
