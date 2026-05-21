@@ -685,7 +685,7 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar):
                 miss_classes.add(e["pred2"])
             for cls in miss_classes:
                 if cls in sc:
-                    penalty = MISS_SUPPRESS_PENALTY * 0.2 if cls in HIGH_MULT_CLASSES else MISS_SUPPRESS_PENALTY
+                    penalty = MISS_SUPPRESS_PENALTY * 0.25 if cls in HIGH_MULT_CLASSES else MISS_SUPPRESS_PENALTY
                     sc[cls] *= (1.0 - penalty)
 
         if len(ph) >= 3:
