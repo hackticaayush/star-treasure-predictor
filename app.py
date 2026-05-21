@@ -8,7 +8,7 @@ app = Flask(__name__)
 
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 DATA_FILE              = "round_data.json"
-SKIP_TOP1_THRESHOLD    = 0.220
+SKIP_TOP1_THRESHOLD    = 0.180
 SKIP_ENTROPY_THRESHOLD = 2.80       # raised: 2.70 → 2.80
 BRAKE_TRIGGER          = 2
 BRAKE_PAUSE            = 2
@@ -26,7 +26,7 @@ TARGET_PLAY_MAX  = 0.50     # was 0.45
 ENT_THRESH_MIN   = 2.65
 ENT_THRESH_MAX   = 3.00     # was 2.90
 
-TOP1_THRESH_MIN  = 0.190
+TOP1_THRESH_MIN  = 0.150
 TOP1_THRESH_MAX  = 0.260
 TOP1_THRESH_STEP = 0.005
 
