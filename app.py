@@ -9,7 +9,7 @@ app = Flask(__name__)
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 DATA_FILE              = "round_data.json"
 SKIP_TOP1_THRESHOLD    = 0.180
-SKIP_ENTROPY_THRESHOLD = 2.85       # raised: 2.70 → 2.80
+SKIP_ENTROPY_THRESHOLD = 2.85       # raised: 2.70 → 2.85
 BRAKE_TRIGGER          = 2
 BRAKE_PAUSE            = 2
 POLL_INTERVAL          = 5
@@ -112,6 +112,12 @@ BONUS_CONF_THRESH_MAX     = 0.22   # raised 0.18→0.22
 BONUS_CONF_THRESH_STEP    = 0.005
 BONUS_EVAL_WINDOW         = 40
 
+# ── PER-CLASS BONUS MISS SUPPRESSION CONFIG ───────────────────────────────────
+# If a bonus class misses N consecutive times it was suggested as bonus,
+# suppress it from bonus picks until it hits at least once.
+BONUS_CLASS_MISS_WINDOW   = 4    # consecutive bonus-specific misses before suppression
+BONUS_CLASS_SUPPRESS_MULT = 0.0  # multiply EV score by this when suppressed (0 = fully block)
+
 # ── GLOBAL STATE ──────────────────────────────────────────────────────────────
 _lock              = threading.Lock()
 _rewards           = []
@@ -168,7 +174,16 @@ _dynamic_markov_w = {
 
 # ── DYNAMIC BONUS THRESHOLD STATE ────────────────────────────────────────────
 _dynamic_bonus_thresh  = BONUS_CONF_THRESH_DEFAULT
+# FIX 1: bonus_eval_log now tracks (bonus_triggered, bonus_hit) where bonus_hit=True
+#         ONLY when actual matched a bonus pick specifically, not just any pred.
 _bonus_eval_log        = []
+
+# ── PER-CLASS BONUS MISS STATE ────────────────────────────────────────────────
+# Tracks consecutive bonus-specific misses per high-mult class.
+# Key: class index (2,3,4,7). Value: list of bools (True=bonus hit, False=bonus miss)
+# for rounds where that class was suggested as a bonus pick.
+_bonus_class_results   = {cls: [] for cls in HIGH_MULT_CLASSES}  # recent True/False per class
+BONUS_CLASS_BUF_MAX    = 20   # keep last 20 bonus appearances per class
 
 # ── RECENT PLAY HISTORY STATE (for miss suppression & noise detection) ────────
 # Stores (pred1, pred2, actual, hit) for each PLAY round in order
@@ -176,14 +191,11 @@ _play_history: list = []
 PLAY_HISTORY_MAX = 30
 
 # ── RECENT MISS SUPPRESSION CONFIG ───────────────────────────────────────────
-# If the same class has been pred1 for N consecutive played rounds and all missed,
-# apply a score penalty to break prediction lock.
-MISS_SUPPRESS_WINDOW    = 3      # consecutive play-round misses before suppression kicks in
-MISS_SUPPRESS_PENALTY   = 0.25   # multiply score by (1 - penalty) for each locked-miss class
-# Short recent history used to detect noise vs pattern (last N actual outcomes)
-NOISE_WINDOW            = 7      # look at last 7 played rounds' actual outcomes
-NOISE_UNIQUE_THRESH     = 5      # if >=5 unique classes in last 7 actuals → high noise mode
-NOISE_SCORE_FLATTEN     = 0.35   # in noise mode, blend scores toward uniform by this fraction
+MISS_SUPPRESS_WINDOW    = 3
+MISS_SUPPRESS_PENALTY   = 0.25
+NOISE_WINDOW            = 7
+NOISE_UNIQUE_THRESH     = 5
+NOISE_SCORE_FLATTEN     = 0.35
 
 
 # ── DAILY RESET ───────────────────────────────────────────────────────────────
@@ -222,7 +234,10 @@ def _do_reset():
         _brake_loss_confs.clear()
         _bonus_eval_log.clear()
         for o in _markov_hit_buf: _markov_hit_buf[o].clear()
-        _play_history.clear()   # clear miss suppression history
+        _play_history.clear()
+        # Reset per-class bonus miss counters
+        for cls in HIGH_MULT_CLASSES:
+            _bonus_class_results[cls].clear()
     _dynamic_brake_trigger = BRAKE_TRIGGER_DEFAULT
     _dynamic_brake_pause   = BRAKE_PAUSE_DEFAULT
     _dynamic_train_rounds  = TRAIN_ROUNDS_DEFAULT
@@ -397,6 +412,12 @@ def recalibrate_boost_cap(boost_eval_log):
 
 # ── DYNAMIC BONUS THRESHOLD ───────────────────────────────────────────────────
 def recalibrate_bonus_thresh(bonus_eval_log):
+    """
+    FIX 1: bonus_eval_log entries are (bonus_triggered, bonus_hit) where
+    bonus_hit is True ONLY when actual matched a bonus pick specifically.
+    This gives accurate signal — the threshold now rises/falls based on
+    whether bonus picks themselves are hitting, not base predictions.
+    """
     global _dynamic_bonus_thresh
     if len(bonus_eval_log) < 15:
         return
@@ -420,6 +441,49 @@ def recalibrate_bonus_thresh(bonus_eval_log):
               f"(bonus_hr={bonus_hit_rate:.2%} base_hr={no_bonus_hit_rate:.2%}, "
               f"n={len(bonus_rounds)})")
         _dynamic_bonus_thresh = new_thresh
+
+# ── PER-CLASS BONUS MISS TRACKER ──────────────────────────────────────────────
+def _get_suppressed_bonus_classes():
+    """
+    FIX 3: Returns the set of bonus classes that are currently suppressed
+    due to BONUS_CLASS_MISS_WINDOW consecutive bonus-specific misses.
+    A class is suppressed if its last N appearances as a bonus pick all missed.
+    It gets unsuppressed the moment it hits once.
+    """
+    suppressed = set()
+    with _lock:
+        for cls in HIGH_MULT_CLASSES:
+            buf = _bonus_class_results[cls]
+            if len(buf) >= BONUS_CLASS_MISS_WINDOW:
+                # Check last N entries — if ALL are False (miss), suppress
+                last_n = buf[-BONUS_CLASS_MISS_WINDOW:]
+                if not any(last_n):
+                    suppressed.add(cls)
+    return suppressed
+
+def _record_bonus_class_result(bonus_picks, actual_val):
+    """
+    FIX 3: Called after a PLAY round resolves. For each class that was
+    suggested as a bonus pick, record whether it specifically hit (actual==cls)
+    or missed. Does NOT record anything for classes not in bonus_picks.
+    """
+    if not bonus_picks:
+        return
+    with _lock:
+        for cls in bonus_picks:
+            hit = (actual_val == cls)
+            _bonus_class_results[cls].append(hit)
+            if len(_bonus_class_results[cls]) > BONUS_CLASS_BUF_MAX:
+                _bonus_class_results[cls].pop(0)
+            if not hit:
+                recent = _bonus_class_results[cls][-BONUS_CLASS_MISS_WINDOW:]
+                if len(recent) == BONUS_CLASS_MISS_WINDOW and not any(recent):
+                    print(f"[BonusSuppress] Class {cls} ({CLASS_NAMES.get(cls,'?')}) "
+                          f"suppressed after {BONUS_CLASS_MISS_WINDOW} consecutive "
+                          f"bonus-specific misses.")
+            else:
+                print(f"[BonusSuppress] Class {cls} ({CLASS_NAMES.get(cls,'?')}) "
+                      f"bonus HIT — suppression cleared.")
 
 # ── PATTERN DETECTOR ─────────────────────────────────────────────────────────
 def compute_pattern_scores(rewards):
@@ -600,26 +664,13 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar):
         _last_pattern_info.update(pattern_info)
         _last_pattern_info["raw_scores"] = {g: round(v, 4) for g, v in pattern_scores.items()}
 
-    # ── CLASS HIT RATE ADJUSTMENT REMOVED (Option 3) ──────────────────────────
-    # Removed: feedback loop caused repeated same-class predictions when
-    # _class_hit_buf accumulated misses across both play AND skip rounds,
-    # suppressing all classes unevenly and locking the model onto one class.
-    # ──────────────────────────────────────────────────────────────────────────
-
     # ── RECENT MISS SUPPRESSION & NOISE ADAPTATION ───────────────────────────
-    # Uses _play_history (play rounds only) to:
-    #   1. Suppress classes that have been stuck as pred1 and keep missing
-    #   2. Flatten scores when recent actuals are highly random (noise mode)
-    #   3. Break prediction lock when same pred1 repeats too many times
     with _lock:
         ph = list(_play_history)
 
     if ph:
-        # --- 1. Miss suppression: penalise classes that keep being predicted but miss ---
-        # Look at last MISS_SUPPRESS_WINDOW play rounds
         recent_ph = ph[-MISS_SUPPRESS_WINDOW:]
         if len(recent_ph) == MISS_SUPPRESS_WINDOW and not any(e["hit"] for e in recent_ph):
-            # All recent played rounds were misses — penalise the repeated pred classes
             miss_classes = set()
             for e in recent_ph:
                 miss_classes.add(e["pred1"])
@@ -628,25 +679,21 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar):
                 if cls in sc:
                     sc[cls] *= (1.0 - MISS_SUPPRESS_PENALTY)
 
-        # --- 2. Prediction lock-break: same pred1 N times in a row → penalise it ---
         if len(ph) >= 3:
             last3_pred1 = [e["pred1"] for e in ph[-3:]]
-            if len(set(last3_pred1)) == 1:  # all same pred1
+            if len(set(last3_pred1)) == 1:
                 locked_cls = last3_pred1[0]
                 if locked_cls in sc:
-                    sc[locked_cls] *= 0.70  # 30% penalty to break the lock
+                    sc[locked_cls] *= 0.70
 
-        # --- 3. Noise detection: if recent actuals are very diverse, flatten scores ---
         recent_actuals = [e["actual"] for e in ph[-NOISE_WINDOW:] if "actual" in e]
         if len(recent_actuals) >= NOISE_WINDOW:
             unique_count = len(set(recent_actuals))
             if unique_count >= NOISE_UNIQUE_THRESH:
-                # High noise — blend toward uniform distribution
                 uniform = 1.0 / 8.0
                 for cls in sc:
                     sc[cls] = sc[cls] * (1.0 - NOISE_SCORE_FLATTEN) + uniform * NOISE_SCORE_FLATTEN
 
-    # Re-normalise after suppression/noise adjustments
     ts = sum(sc.values()) or 1.0
     sc = {k: v / ts for k, v in sc.items()}
     # ─────────────────────────────────────────────────────────────────────────
@@ -665,13 +712,27 @@ def should_play(t1, ent, brake_active=False):
 
 # ── BONUS PICK LOGIC ──────────────────────────────────────────────────────────
 def get_bonus_picks(scores, top2):
+    """
+    FIX 3: Per-class suppression applied here.
+    Classes with BONUS_CLASS_MISS_WINDOW consecutive bonus-specific misses
+    are excluded from bonus suggestions until they hit at least once.
+    """
     with _lock:
         thresh = _dynamic_bonus_thresh
 
     sc_map  = {int(k): float(v) for k, v in scores.items()}
 
+    # Get currently suppressed bonus classes
+    suppressed = _get_suppressed_bonus_classes()
+    if suppressed:
+        print(f"[BonusSuppress] Currently suppressed classes: "
+              f"{[CLASS_NAMES.get(c, str(c)) for c in suppressed]}")
+
     qualifying = set()
     for cls in HIGH_MULT_CLASSES:
+        # Skip suppressed classes entirely
+        if cls in suppressed:
+            continue
         prob = sc_map.get(cls, 0.0)
         mult = HIGH_MULT_EV.get(cls, 1)
         ev_pass   = (prob * mult) >= HIGH_MULT_EV_TARGET
@@ -740,7 +801,9 @@ def _run_sim(rewards):
         sim_boost_log.append((any_triggered, hit))
         bonus = get_bonus_picks(sc, top2)
         bonus_triggered = bonus is not None
-        sim_bonus_log.append((bonus_triggered, hit))
+        # FIX 1 (sim): bonus_hit = actual matched a bonus pick specifically
+        bonus_hit = (bonus is not None and tn in bonus)
+        sim_bonus_log.append((bonus_triggered, bonus_hit))
         if hit:
             hits+=1; ls=0; ws+=1; mw=max(mw,ws)
         else:
@@ -834,6 +897,9 @@ def _build_cached_pred(rewards, raw_rounds, brake):
                 "boost_applied": info.get("boost_applied", 0.0),
             }
 
+    # Expose current suppression state for UI/debugging
+    suppressed_classes = list(_get_suppressed_bonus_classes())
+
     return {
         "next_round":         next_round,   "latest_round":  last_round,
         "pred1":              top2[0],      "pred2":         top2[1],
@@ -867,6 +933,7 @@ def _build_cached_pred(rewards, raw_rounds, brake):
         "pattern_boost_max":  round(boost_max, 4),
         "bonus_conf_thresh":  round(bonus_thresh, 4),
         "markov_weights":     {k: round(v, 4) for k, v in dw.items()},
+        "suppressed_bonus_classes": suppressed_classes,
         "_play":              play,
         "_top2":              list(top2),
         "_top3":              ([top2[0], top2[1], pred3] if pred3 else list(top2)),
@@ -929,6 +996,10 @@ def fetcher_loop():
                         if hit and pending.get("pattern_scores"):
                             for group_name, pscore in pending["pattern_scores"].items():
                                 update_pattern_hit(group_name, pscore)
+
+                        # FIX 3: Record per-class bonus result (bonus-specific hit/miss only)
+                        _record_bonus_class_result(pending.get("bonus_picks"), actual_val)
+
                         with _lock:
                             _brake_play_results.append(hit)
                             if len(_brake_play_results) > BRAKE_HITRATE_WINDOW * 2:
@@ -950,12 +1021,20 @@ def fetcher_loop():
                                 _boost_eval_log.pop(0)
                             boost_log_snap = list(_boost_eval_log)
                         recalibrate_boost_cap(boost_log_snap)
+
+                        # FIX 1: bonus_hit = actual matched a bonus pick specifically
+                        bonus_picks_pending = pending.get("bonus_picks")
+                        bonus_hit = (
+                            bonus_picks_pending is not None and
+                            actual_val in bonus_picks_pending
+                        )
                         with _lock:
-                            _bonus_eval_log.append((pending.get("bonus_triggered", False), hit))
+                            _bonus_eval_log.append((pending.get("bonus_triggered", False), bonus_hit))
                             if len(_bonus_eval_log) > BONUS_EVAL_WINDOW * 3:
                                 _bonus_eval_log.pop(0)
                             bonus_log_snap = list(_bonus_eval_log)
                         recalibrate_bonus_thresh(bonus_log_snap)
+
                         markov_preds_pending = pending.get("markov_preds", {})
                         with _lock:
                             for order, pred_cls in markov_preds_pending.items():
@@ -975,7 +1054,6 @@ def fetcher_loop():
                         with _lock:
                             _live_log.append(entry)
                             _pending_pred = None
-                            # Update play history for miss suppression / noise detection
                             _play_history.append({
                                 "pred1":  pending["top2"][0],
                                 "pred2":  pending["top2"][1],
@@ -986,7 +1064,8 @@ def fetcher_loop():
                                 _play_history.pop(0)
                         pending = None
                         print(f"[Live] #{pred_round}: pred={entry['top2']} "
-                              f"actual={actual_val} → {'HIT ✓' if hit else 'MISS ✗'}")
+                              f"actual={actual_val} → {'HIT ✓' if hit else 'MISS ✗'} "
+                              f"bonus_hit={bonus_hit}")
                     elif records and pred_round <= records[-1]["round"]:
                         with _lock:
                             _pending_pred = None
@@ -994,9 +1073,6 @@ def fetcher_loop():
                         print(f"[Fetcher] Stale pending cleared (#{pred_round})")
 
                 # ── Resolve SKIP pending prediction ──────────────────────────
-                # Only used to clear the skip_pending slot — no class hit
-                # recording, no brake updates. Skip rounds do not affect
-                # any scoring state.
                 if skip_pending is not None:
                     skip_round = skip_pending["round"]
                     skip_rec   = next((r for r in records if r["round"] == skip_round), None)
@@ -1177,6 +1253,7 @@ def api_stats():
         dyn_lk    = _dynamic_lookback
         dyn_dc    = _dynamic_decay
         ph_snap   = list(_play_history)
+        bcr_snap  = {cls: list(v) for cls, v in _bonus_class_results.items()}
     cur = 0; mx_live = 0
     for e in reversed(live):
         if not e["hit"]: cur += 1; mx_live = max(mx_live, cur)
@@ -1211,6 +1288,19 @@ def api_stats():
     recent_actuals = [e["actual"] for e in ph_snap[-NOISE_WINDOW:] if "actual" in e]
     stats["noise_mode"]          = (len(recent_actuals) >= NOISE_WINDOW and
                                     len(set(recent_actuals)) >= NOISE_UNIQUE_THRESH)
+    # Per-class bonus miss state
+    suppressed = list(_get_suppressed_bonus_classes())
+    stats["suppressed_bonus_classes"] = suppressed
+    stats["bonus_class_results"] = {
+        str(cls): {
+            "buf":           bcr_snap.get(cls, [])[-BONUS_CLASS_MISS_WINDOW:],
+            "suppressed":    cls in suppressed,
+            "consecutive_misses": sum(1 for _ in
+                                      (x for x in reversed(bcr_snap.get(cls, [])) if not x)
+                                      ) if bcr_snap.get(cls) else 0,
+        }
+        for cls in HIGH_MULT_CLASSES
+    }
     return jsonify(stats)
 
 @app.route("/api/status")
@@ -1311,6 +1401,7 @@ def api_brake():
 @app.route("/api/adaptive")
 def api_adaptive():
     with _lock:
+        suppressed = list(_get_suppressed_bonus_classes())
         return jsonify({
             "entropy_threshold":   {"value": round(_entropy_threshold, 4),
                                     "min": ENT_THRESH_MIN, "max": ENT_THRESH_MAX},
@@ -1336,6 +1427,11 @@ def api_adaptive():
             "ev_thresholds":       {str(cls): {"multiplier": mult,
                                                "min_prob": round(HIGH_MULT_EV_TARGET/mult, 4)}
                                     for cls, mult in HIGH_MULT_EV.items()},
+            "bonus_class_suppress": {
+                "window":      BONUS_CLASS_MISS_WINDOW,
+                "suppressed":  suppressed,
+                "suppressed_names": [CLASS_NAMES.get(c, str(c)) for c in suppressed],
+            },
         })
 
 # ── STARTUP ───────────────────────────────────────────────────────────────────
