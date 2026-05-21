@@ -17,7 +17,7 @@ POLL_INTERVAL          = 5
 HIGH_MULT_CLASSES      = {2, 3, 4, 7}
 
 # EV multipliers for bonus inclusion
-HIGH_MULT_EV        = {2: 9, 3: 20, 4: 13, 7: 34}
+HIGH_MULT_EV        = {2: 9, 3: 20, 4: 13, 7: 25}
 HIGH_MULT_EV_TARGET = 1.0   # prob * multiplier >= 1.0 qualifies
 
 # Entropy adaptation targets — raised to reduce over-skipping
