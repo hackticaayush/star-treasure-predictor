@@ -772,6 +772,8 @@ function launchApp() {
     if(countdown<=0){ doRefresh(); }
   },1000);
 }
+
+function buildUI(pred,stats,history,status){
   const isPlay = pred.action === 'PLAY';
   const bonus  = pred.bonus_picks || null;
   // skip_show_bonus_only: true when SKIP + bonus exists → hide main picks, show bonus only
