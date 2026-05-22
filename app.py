@@ -1085,7 +1085,19 @@ def _build_cached_pred(rewards, raw_rounds, brake):
     top2_are_small = all(c in SMALL_MULT for c in top2)
     normal_top3_condition = (play and top2_are_small and t3c is not None
                              and (t2s - t3s) <= 0.01)
-    if play and (normal_top3_condition or penalty_forced):
+
+    # Force top3 if recent play history has 2+ consecutive misses
+    with _lock:
+        ph_snap = list(_play_history)
+    recent_misses = (
+        len(ph_snap) >= 2
+        and not ph_snap[-1]["hit"]
+        and not ph_snap[-2]["hit"]
+    )
+    if recent_misses:
+        print(f"[Top3Force] 2+ consecutive misses detected → forcing pred3")
+
+    if play and (normal_top3_condition or penalty_forced or recent_misses):
         if t3c is not None:
             pred3      = t3c
             pred3_conf = round(t3s * 100, 2)
