@@ -207,7 +207,7 @@ MISS_SUPPRESS_WINDOW    = 3
 MISS_SUPPRESS_PENALTY   = 0.25  # reduced from 0.25
 NOISE_WINDOW            = 7
 NOISE_UNIQUE_THRESH     = 5
-NOISE_SCORE_FLATTEN     = 0.15  # reduced from 0.35
+NOISE_SCORE_FLATTEN     = 0.30  # reduced from 0.35
 
 
 # ── DAILY RESET ───────────────────────────────────────────────────────────────
@@ -459,9 +459,19 @@ def _get_suppressed_bonus_classes():
     return suppressed
 
 def _record_bonus_class_result(bonus_picks, actual_val):
-    if not bonus_picks:
-        return
     with _lock:
+        # Always record organic hit for suppressed high-mult classes
+        # so suppression can lift even when class wasn't picked
+        if actual_val in HIGH_MULT_CLASSES and actual_val not in (bonus_picks or []):
+            _bonus_class_results[actual_val].append(True)
+            if len(_bonus_class_results[actual_val]) > BONUS_CLASS_BUF_MAX:
+                _bonus_class_results[actual_val].pop(0)
+            print(f"[BonusSuppress] Class {actual_val} ({CLASS_NAMES.get(actual_val,'?')}) "
+                  f"appeared organically — suppression cleared.")
+
+        if not bonus_picks:
+            return
+
         for cls in bonus_picks:
             hit = (actual_val == cls)
             _bonus_class_results[cls].append(hit)
@@ -476,7 +486,6 @@ def _record_bonus_class_result(bonus_picks, actual_val):
             else:
                 print(f"[BonusSuppress] Class {cls} ({CLASS_NAMES.get(cls,'?')}) "
                       f"bonus HIT — suppression cleared.")
-
 # ── PATTERN DETECTOR ─────────────────────────────────────────────────────────
 def compute_pattern_scores(rewards):
     with _lock:
