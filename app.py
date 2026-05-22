@@ -877,16 +877,38 @@ def should_play(t1, ent, brake_active=False):
     return effective_ent < eth
 
 # ── BONUS PICK LOGIC ──────────────────────────────────────────────────────────
+# ── HIGH-MULT CASCADE CONFIG ──────────────────────────────────────────────────
+# If a high-mult class appeared last round, boost the lower high-mult classes
+# in bonus scoring only. Does NOT touch main sc[] scores.
+HIGH_MULT_CASCADE = {
+    7: {3, 2},      # 50x came → boost 25x and 10x
+    3: {4, 2},      # 25x came → boost 15x and 10x
+    4: {2},         # 15x came → boost 10x
+    2: set(),       # 10x came → no cascade (nothing lower)
+}
+CASCADE_EV_BOOST = 0.40   # how much to boost EV score for cascade classes
+
 def get_bonus_picks(scores, top2):
     with _lock:
         thresh = _dynamic_bonus_thresh
 
-    sc_map  = {int(k): float(v) for k, v in scores.items()}
+    sc_map = {int(k): float(v) for k, v in scores.items()}
 
     suppressed = _get_suppressed_bonus_classes()
     if suppressed:
         print(f"[BonusSuppress] Currently suppressed classes: "
               f"{[CLASS_NAMES.get(c, str(c)) for c in suppressed]}")
+
+    # ── Cascade: check if last round was a high-mult ──────────────────────────
+    with _lock:
+        last_reward = _rewards[-1] if _rewards else None
+    cascade_classes = set()
+    if last_reward in HIGH_MULT_CASCADE:
+        cascade_classes = HIGH_MULT_CASCADE[last_reward]
+        if cascade_classes:
+            print(f"[Cascade] Last round was {CLASS_NAMES.get(last_reward,'?')} "
+                  f"→ cascade boost for: "
+                  f"{[CLASS_NAMES.get(c,'?') for c in cascade_classes]}")
 
     qualifying = set()
     for cls in HIGH_MULT_CLASSES:
@@ -894,7 +916,12 @@ def get_bonus_picks(scores, top2):
             continue
         prob = sc_map.get(cls, 0.0)
         mult = HIGH_MULT_EV.get(cls, 1)
-        ev_pass   = (prob * mult) >= HIGH_MULT_EV_TARGET
+        ev_base = prob * mult
+
+        # Apply cascade EV boost for qualifying cascade classes (bonus-only)
+        ev_boosted = ev_base + CASCADE_EV_BOOST if cls in cascade_classes else ev_base
+
+        ev_pass   = ev_boosted >= HIGH_MULT_EV_TARGET
         conf_pass = prob > thresh
         if ev_pass or conf_pass:
             qualifying.add(cls)
@@ -904,7 +931,10 @@ def get_bonus_picks(scores, top2):
 
     ev_ranked = sorted(
         qualifying,
-        key=lambda cls: sc_map.get(cls, 0.0) * HIGH_MULT_EV.get(cls, 1),
+        key=lambda cls: (
+            sc_map.get(cls, 0.0) * HIGH_MULT_EV.get(cls, 1)
+            + (CASCADE_EV_BOOST if cls in cascade_classes else 0.0)
+        ),
         reverse=True
     )
     bonus = [cls for cls in ev_ranked if cls not in top2]
