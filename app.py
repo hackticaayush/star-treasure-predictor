@@ -1209,7 +1209,7 @@ def _build_cached_pred(rewards, raw_rounds, brake):
             pred3      = t3c
             pred3_conf = round(t3s * 100, 2)
 
-    bonus_picks = get_bonus_picks(scores, top2)
+    bonus_picks = get_bonus_picks(scores, top3)
 
     bonus_details = None
     if bonus_picks:
