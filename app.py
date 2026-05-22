@@ -270,7 +270,6 @@ def _should_reset():
 def _do_reset():
     global _last_reset_date, _pending_pred, _cached_pred
     global _dynamic_boost_max, _dynamic_boost_min
-    global _dynamic_boost_max, _dynamic_boost_min
 
     now_ist = datetime.now(IST)
     print(f"[Reset] 5:30 AM IST — wiping data ({now_ist.date()})")
@@ -477,6 +476,7 @@ def recalibrate_boost_cap(boost_eval_log):
 
 # ── DYNAMIC BONUS THRESHOLD ───────────────────────────────────────────────────
 def recalibrate_bonus_thresh(bonus_eval_log):
+    global _dynamic_bonus_thresh
     with _lock:
         cur = _dynamic_bonus_thresh
     if len(bonus_eval_log) < 15:
@@ -500,7 +500,6 @@ def recalibrate_bonus_thresh(bonus_eval_log):
               f"(bonus_hr={bonus_hit_rate:.2%} base_hr={no_bonus_hit_rate:.2%}, "
               f"n={len(bonus_rounds)})")
     with _lock:
-        global _dynamic_bonus_thresh
         _dynamic_bonus_thresh = new_thresh
 
 # ── PER-CLASS BONUS MISS TRACKER ──────────────────────────────────────────────
