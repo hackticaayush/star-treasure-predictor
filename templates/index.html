@@ -141,7 +141,6 @@ body{font-family:'Nunito',sans-serif;min-height:100vh;background:#07052a;color:#
 .picks-or{font-family:'Lilita One',cursive;font-size:22px;color:rgba(255,255,255,0.25);flex-shrink:0;}
 .picks-or.sm{font-size:16px;}
 
-/* bonus section — shared for PLAY and SKIP */
 .bonus-sec{background:linear-gradient(135deg,rgba(255,152,0,0.11),rgba(255,100,0,0.04));border:1.5px solid rgba(255,152,0,0.38);border-radius:14px;padding:13px 12px 10px;margin-bottom:16px;position:relative;overflow:hidden;}
 .bonus-sec::after{content:'🎰';position:absolute;right:6px;top:-2px;font-size:44px;opacity:0.09;pointer-events:none;}
 .bonus-hdr{display:flex;align-items:center;gap:6px;margin-bottom:11px;}
@@ -155,7 +154,6 @@ body{font-family:'Nunito',sans-serif;min-height:100vh;background:#07052a;color:#
 .bconf{font-size:10px;color:rgba(255,152,0,0.5);font-family:'Share Tech Mono',monospace;}
 .bor{font-family:'Lilita One',cursive;font-size:16px;color:rgba(255,152,0,0.28);flex-shrink:0;}
 .bnote{margin-top:9px;text-align:center;font-size:10px;font-weight:800;color:rgba(255,152,0,0.55);letter-spacing:0.5px;}
-/* skip-only bonus note */
 .bnote-skip{margin-top:9px;text-align:center;font-size:10px;font-weight:800;color:rgba(255,152,0,0.7);letter-spacing:0.5px;background:rgba(255,152,0,0.07);border-radius:8px;padding:5px 8px;}
 
 .entrow{display:flex;justify-content:space-between;font-size:11px;margin-bottom:5px;color:var(--muted);font-weight:700;}
@@ -238,15 +236,13 @@ body{font-family:'Nunito',sans-serif;min-height:100vh;background:#07052a;color:#
   .planet-wrap.sm{width:60px;height:60px;}
 }
 
-/* ── WAITING SCREEN (cooldown / warmup) ──────────────────────────────────── */
+/* ── WAITING SCREEN ──────────────────────────────────────────────────────── */
 .wait-wrap{padding:4px 0 40px;}
-
 .wait-banner{text-align:center;padding:18px 16px 14px;margin-bottom:10px;}
 .wait-mode-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(0,229,255,0.08);border:1px solid rgba(0,229,255,0.3);border-radius:20px;padding:5px 16px;font-size:11px;font-weight:800;color:var(--cyan);letter-spacing:2px;margin-bottom:14px;animation:pulse-badge 2.5s ease-in-out infinite;}
 @keyframes pulse-badge{0%,100%{box-shadow:0 0 0 0 rgba(0,229,255,0.2)}50%{box-shadow:0 0 0 8px rgba(0,229,255,0)}}
 .wait-title{font-family:'Lilita One',cursive;font-size:24px;background:linear-gradient(180deg,#fff 0%,#ffd700 50%,#ff9800 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 2px 14px rgba(255,200,0,0.4));margin-bottom:6px;line-height:1.25;}
 .wait-sub{font-size:12px;color:var(--muted);}
-
 .countdown-card{background:rgba(6,4,32,0.88);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);border:1.5px solid rgba(255,215,0,0.28);border-radius:22px;padding:20px 14px 18px;margin-bottom:12px;text-align:center;box-shadow:0 0 60px rgba(255,215,0,0.07),0 8px 40px rgba(0,0,0,0.6);}
 .cd-label{font-size:10px;font-weight:800;color:rgba(255,215,0,0.45);letter-spacing:2.5px;text-transform:uppercase;margin-bottom:14px;}
 .cd-display{display:flex;align-items:center;justify-content:center;gap:6px;}
@@ -254,7 +250,6 @@ body{font-family:'Nunito',sans-serif;min-height:100vh;background:#07052a;color:#
 .cd-num{font-family:'Lilita One',cursive;font-size:50px;color:var(--gold);line-height:1;text-shadow:0 0 40px rgba(255,215,0,0.45);}
 .cd-lbl{font-size:9px;font-weight:800;color:rgba(255,215,0,0.38);letter-spacing:2px;}
 .cd-sep{font-family:'Lilita One',cursive;font-size:40px;color:rgba(255,215,0,0.28);margin-bottom:14px;animation:blink 1.1s infinite;}
-
 .wait-planets-row{display:flex;justify-content:center;align-items:flex-end;gap:2px;padding:10px 0 14px;overflow:hidden;}
 .wfp{display:flex;flex-direction:column;align-items:center;gap:3px;flex:1;max-width:50px;}
 .wfp-img{width:42px;height:42px;object-fit:contain;}
@@ -267,16 +262,13 @@ body{font-family:'Nunito',sans-serif;min-height:100vh;background:#07052a;color:#
 .wfp:nth-child(7) .wfp-img{animation:pfloat 3.2s ease-in-out -2.4s infinite;}
 .wfp:nth-child(8) .wfp-img{animation:pfloat 3.2s ease-in-out -2.8s infinite;}
 .wfp-lbl{font-size:7px;font-weight:800;text-align:center;line-height:1.2;opacity:0.7;}
-
 .prev-section-hdr{display:flex;align-items:center;gap:10px;padding:14px 0 12px;font-family:'Lilita One',cursive;font-size:14px;color:var(--gold);}
 .prev-section-hdr::before,.prev-section-hdr::after{content:'';flex:1;height:1px;background:rgba(255,215,0,0.18);}
-
 .pstat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;}
 .pstat{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:14px;padding:14px 6px 12px;text-align:center;}
 .pstat-val{font-family:'Lilita One',cursive;font-size:24px;line-height:1;}
 .pstat-val.g{color:var(--green)}.pstat-val.r{color:var(--red)}.pstat-val.w{color:var(--gold)}.pstat-val.c{color:var(--cyan)}.pstat-val.m{color:#c084fc;}
 .pstat-lbl{font-size:10px;color:var(--muted);margin-top:3px;font-weight:700;}
-
 .pdist-card{background:var(--card);backdrop-filter:blur(20px);border:1px solid var(--cbord);border-radius:var(--r);padding:16px;margin-bottom:10px;}
 .pdist-title{font-family:'Lilita One',cursive;font-size:13px;color:var(--gold);letter-spacing:1px;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
 .pdist-title::after{content:'';flex:1;height:1px;background:rgba(255,215,0,0.18);}
@@ -287,17 +279,15 @@ body{font-family:'Nunito',sans-serif;min-height:100vh;background:#07052a;color:#
 .pdist-bar-wrap{height:5px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden;}
 .pdist-bar{height:100%;border-radius:3px;transition:width 1.2s ease;}
 .pdist-cnt{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);text-align:right;white-space:nowrap;}
-
 .prev-results-card{background:var(--card);border:1px solid var(--cbord);border-radius:var(--r);padding:16px;margin-bottom:10px;}
 .prev-results-title{font-family:'Lilita One',cursive;font-size:13px;color:var(--gold);letter-spacing:1px;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
 .prev-results-title::after{content:'';flex:1;height:1px;background:rgba(255,215,0,0.18);}
-
 </style>
 </head>
 <body>
 <div id="bg"></div>
 
-<!-- SCREEN 1 -->
+<!-- SCREEN 1: Install (browser) -->
 <div class="screen" id="s-browser">
   <div class="gate-logo">✨ TREASURE AI ✨</div>
   <div class="gate-sub">INSTALL REQUIRED TO ACCESS</div>
@@ -321,7 +311,7 @@ body{font-family:'Nunito',sans-serif;min-height:100vh;background:#07052a;color:#
   </div>
 </div>
 
-<!-- SCREEN 2 -->
+<!-- SCREEN 2: UUID -->
 <div class="screen" id="s-uuid">
   <div class="uuid-logo">✨ TREASURE AI ✨</div>
   <div class="uuid-badge">YOUR ACCESS KEY</div>
@@ -338,14 +328,14 @@ body{font-family:'Nunito',sans-serif;min-height:100vh;background:#07052a;color:#
   <div class="uuid-note">After sharing your UUID with admin,<br>close and reopen the app to check access.</div>
 </div>
 
-<!-- SCREEN 3 -->
+<!-- SCREEN 3: Verifying -->
 <div class="screen" id="s-verify">
   <div class="verify-spinner"></div>
   <div class="verify-title">Verifying Access...</div>
   <div class="verify-sub">Please wait a moment</div>
 </div>
 
-<!-- SCREEN 4 -->
+<!-- SCREEN 4: Denied -->
 <div class="screen" id="s-denied">
   <div class="denied-icon" id="deniedIcon">🚫</div>
   <div class="denied-title" id="deniedTitle">Access Denied</div>
@@ -353,7 +343,7 @@ body{font-family:'Nunito',sans-serif;min-height:100vh;background:#07052a;color:#
   <div class="denied-status" id="deniedStatus">NO ACCESS</div>
 </div>
 
-<!-- SCREEN 5 -->
+<!-- SCREEN 5: App -->
 <div id="s-app">
   <div id="wrap">
     <div class="hdr">
@@ -384,14 +374,23 @@ const IDB_UUID_KEY    = "uuid";
 const IDB_ACCESS_KEY  = "access_cache";
 const ACCESS_CACHE_MS = 30 * 60 * 1000;
 
+// ── SCREEN MANAGEMENT ────────────────────────────────────────────────────────
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   const appEl = document.getElementById('s-app');
+  appEl.style.display = 'none';
   appEl.classList.remove('active');
-  if (id === 's-app') { appEl.classList.add('active'); }
-  else { const el = document.getElementById(id); if (el) el.classList.add('active'); }
+  if (id === 's-app') {
+    appEl.style.display = 'flex';
+    // small delay so display:flex takes effect before opacity transition
+    requestAnimationFrame(() => appEl.classList.add('active'));
+  } else {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('active');
+  }
 }
 
+// ── INDEXEDDB ────────────────────────────────────────────────────────────────
 function openDB() {
   return new Promise((res, rej) => {
     const req = indexedDB.open(IDB_DB_NAME, 1);
@@ -419,6 +418,7 @@ async function idbSet(key, value) {
   });
 }
 
+// ── UUID ─────────────────────────────────────────────────────────────────────
 function generateUUID() {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
@@ -433,6 +433,7 @@ async function getOrCreateUUID() {
   return uuid;
 }
 
+// ── HMAC ─────────────────────────────────────────────────────────────────────
 async function hmacSign(payload, secret) {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name:'HMAC', hash:'SHA-256' }, false, ['sign']);
@@ -455,6 +456,7 @@ async function verifyWithWorker(uuid) {
   return data;
 }
 
+// ── PWA DETECTION ─────────────────────────────────────────────────────────────
 function isRunningAsPWA() {
   return (
     window.matchMedia('(display-mode: standalone)').matches ||
@@ -464,14 +466,25 @@ function isRunningAsPWA() {
 }
 function isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent); }
 
+// ── BOOT ─────────────────────────────────────────────────────────────────────
 async function boot() {
-  if (!isRunningAsPWA()) { showScreen('s-browser'); initInstallFlow(); return; }
+  if (!isRunningAsPWA()) {
+    showScreen('s-browser');
+    initInstallFlow();
+    return;
+  }
   let uuid;
   try { uuid = await getOrCreateUUID(); }
-  catch(e) { showScreen('s-uuid'); document.getElementById('uuidDisplay').textContent='Storage error — try reinstalling app'; return; }
+  catch(e) {
+    showScreen('s-uuid');
+    document.getElementById('uuidDisplay').textContent = 'Storage error — try reinstalling app';
+    return;
+  }
   let cache;
   try { cache = await idbGet(IDB_ACCESS_KEY); } catch { cache = null; }
-  if (cache && cache.ok && (Date.now() - cache.cachedAt) < ACCESS_CACHE_MS) { launchApp(); return; }
+  if (cache && cache.ok && (Date.now() - cache.cachedAt) < ACCESS_CACHE_MS) {
+    launchApp(); return;
+  }
   showScreen('s-verify');
   let result;
   try { result = await verifyWithWorker(uuid); }
@@ -496,15 +509,18 @@ function showUUIDScreen(uuid) {
   showScreen('s-uuid');
   document.getElementById('uuidDisplay').textContent = uuid;
   const copyBtn = document.getElementById('copyBtn');
-  copyBtn.addEventListener('click', async () => {
+  // remove old listeners by cloning
+  const fresh = copyBtn.cloneNode(true);
+  copyBtn.parentNode.replaceChild(fresh, copyBtn);
+  fresh.addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(uuid); }
     catch {
       const ta = document.createElement('textarea');
       ta.value = uuid; ta.style.cssText='position:fixed;opacity:0';
       document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
     }
-    copyBtn.innerHTML='<span>✅</span> Copied!'; copyBtn.classList.add('copied');
-    setTimeout(()=>{copyBtn.innerHTML='<span>📋</span> Copy UUID';copyBtn.classList.remove('copied');},2500);
+    fresh.innerHTML='<span>✅</span> Copied!'; fresh.classList.add('copied');
+    setTimeout(()=>{ fresh.innerHTML='<span>📋</span> Copy UUID'; fresh.classList.remove('copied'); }, 2500);
   });
 }
 
@@ -518,31 +534,64 @@ function showDenied(reason) {
   }
 }
 
+// ── INSTALL FLOW ─────────────────────────────────────────────────────────────
 let deferredPrompt = null;
+let _installPromptReady = false;
+
 function initInstallFlow() {
   const btn = document.getElementById('installBtn');
+
   if (isIOS()) {
-    document.getElementById('androidSteps').style.display='none';
-    document.getElementById('iosSteps').style.display='block';
-    btn.innerHTML='<span>📱</span> See Install Steps Above'; btn.disabled=false; btn.style.opacity='0.7'; return;
+    document.getElementById('androidSteps').style.display = 'none';
+    document.getElementById('iosSteps').style.display = 'block';
+    btn.innerHTML = '<span>📱</span> See Install Steps Above';
+    btn.disabled = false;
+    btn.style.opacity = '0.7';
+    return;
   }
+
+  // Listen for the install prompt — may fire immediately or after several seconds
   window.addEventListener('beforeinstallprompt', e => {
-    e.preventDefault(); deferredPrompt=e;
-    btn.innerHTML='<span>📲</span> Install Treasure AI'; btn.disabled=false;
-    btn.addEventListener('click', async () => {
-      if (!deferredPrompt) return;
+    e.preventDefault();
+    deferredPrompt = e;
+    _installPromptReady = true;
+    btn.innerHTML = '<span>📲</span> Install Treasure AI';
+    btn.disabled = false;
+    btn.style.opacity = '1';
+  });
+
+  window.addEventListener('appinstalled', () => {
+    btn.innerHTML = '<span>✅</span> App Installed! Open from home screen';
+    btn.disabled = true;
+  });
+
+  btn.addEventListener('click', async () => {
+    if (deferredPrompt) {
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
-      deferredPrompt=null;
-      if (outcome==='accepted') { btn.innerHTML='<span>✅</span> Installing...'; btn.disabled=true; }
-    });
+      deferredPrompt = null;
+      if (outcome === 'accepted') {
+        btn.innerHTML = '<span>✅</span> Installing...';
+        btn.disabled = true;
+      }
+    } else {
+      // Fallback: guide to manual install
+      btn.innerHTML = '<span>⋮</span> Use Menu → Add to Home Screen';
+      btn.style.opacity = '0.7';
+    }
   });
-  window.addEventListener('appinstalled', () => { btn.innerHTML='<span>✅</span> App Installed! Open from home screen'; btn.disabled=true; });
-  setTimeout(()=>{
-    if (btn.disabled && !deferredPrompt) { btn.innerHTML='<span>⋮</span> Use Menu → Add to Home Screen'; btn.disabled=false; btn.style.opacity='0.7'; }
-  },3000);
+
+  // After 4 seconds, if prompt still hasn't fired, enable button with manual fallback
+  setTimeout(() => {
+    if (!_installPromptReady) {
+      btn.innerHTML = '<span>⋮</span> Use Menu → Add to Home Screen';
+      btn.disabled = false;
+      btn.style.opacity = '0.7';
+    }
+  }, 4000);
 }
 
+// ── ASSET MAPS ───────────────────────────────────────────────────────────────
 const BALL = {
   1:'https://m.starmakerstudios.com/cdn/vue/agile-vue3/views/spa-rhapsody-music/web-sync/img/new/ball/ball1-a991f.png',
   2:'https://m.starmakerstudios.com/cdn/vue/agile-vue3/views/spa-rhapsody-music/web-sync/img/new/ball/ball2-f05ee.png',
@@ -556,15 +605,15 @@ const BALL = {
 const NAMES  = {1:'Purple',2:'10 Times',3:'25 Times',4:'15 Times',5:'Yellow',6:'Light Green',7:'50 Times',8:'Dark Green'};
 const COLORS = {1:'#c084fc',2:'#f87171',3:'#fb923c',4:'#facc15',5:'#fde047',6:'#4ade80',7:'#22d3ee',8:'#22c55e'};
 
-const fmt = n => n!=null ? n.toLocaleString() : '—';
+const fmt = n => n != null ? n.toLocaleString() : '—';
 const img = (idx, cls='', sty='') =>
   `<img src="${BALL[idx]||''}" alt="${NAMES[idx]||idx}" class="${cls}" style="${sty}" loading="lazy" onerror="this.style.opacity='.3'">`;
 
-let cdEl=null, countdown=5, lastRound=null;
-let _waitCdInterval = null;   // countdown interval for waiting screen
-let _currentMode    = null;   // track last-seen mode to avoid full re-render every tick
+// ── WAITING SCREEN ───────────────────────────────────────────────────────────
+let _waitCdInterval = null;
+let _currentMode    = null;
+let cdEl = null, countdown = 5, lastRound = null;
 
-/* ── WAITING SCREEN BUILDER ─────────────────────────────────────────────── */
 function buildWaitingHTML(modeData, prevDay) {
   const isCooldown = modeData.mode === 'cooldown';
   const h12  = modeData.live_hour_12 || 4;
@@ -584,7 +633,6 @@ function buildWaitingHTML(modeData, prevDay) {
   const mm = String(Math.floor((secs % 3600) / 60)).padStart(2,'0');
   const ss = String(secs % 60).padStart(2,'0');
 
-  // Floating planets row (all 8)
   const planets = [1,2,3,4,5,6,7,8].map(i => `
     <div class="wfp">
       <img src="${BALL[i]}" class="wfp-img" alt="${NAMES[i]}"
@@ -596,8 +644,6 @@ function buildWaitingHTML(modeData, prevDay) {
   if (prevDay) {
     const acc = prevDay.accuracy || 0;
     const accCls = acc >= 65 ? 'g' : acc >= 55 ? 'w' : 'r';
-
-    /* Stats grid */
     const statsGrid = `
       <div class="pstat-grid">
         <div class="pstat"><div class="pstat-val ${accCls}">${acc}%</div><div class="pstat-lbl">Accuracy</div></div>
@@ -607,8 +653,6 @@ function buildWaitingHTML(modeData, prevDay) {
         <div class="pstat"><div class="pstat-val w">${prevDay.max_win_streak}</div><div class="pstat-lbl">Best Win</div></div>
         <div class="pstat"><div class="pstat-val m">${prevDay.total_rounds}</div><div class="pstat-lbl">Total Rounds</div></div>
       </div>`;
-
-    /* Planet distribution */
     const dist = prevDay.planet_dist || {};
     const total = prevDay.total_rounds || 1;
     const maxCnt = Math.max(...Object.values(dist).map(Number));
@@ -625,18 +669,13 @@ function buildWaitingHTML(modeData, prevDay) {
             ${img(i,'pdist-img','')}
             <div class="pdist-info">
               <div class="pdist-name" style="color:${col}">${NAMES[i]||i}</div>
-              <div class="pdist-bar-wrap">
-                <div class="pdist-bar" style="width:${barW}%;background:${col}"></div>
-              </div>
+              <div class="pdist-bar-wrap"><div class="pdist-bar" style="width:${barW}%;background:${col}"></div></div>
             </div>
             <div class="pdist-cnt">${cnt} <span style="opacity:.45">(${pct}%)</span></div>
           </div>`;
       }).join('');
-
-    /* Sample results */
     const sampleRows = (prevDay.sample_results || []).map(r => {
-      const hit = r.hit;
-      return `<div class="rrow2 ${hit?'hit':'miss'}">
+      return `<div class="rrow2 ${r.hit?'hit':'miss'}">
         <div class="rround">#${r.round}</div>
         <div class="rpreds">
           <div class="rball">${img(r.pred1,'','width:22px;height:22px;object-fit:contain')}</div>
@@ -644,22 +683,15 @@ function buildWaitingHTML(modeData, prevDay) {
         </div>
         <div class="ract">
           ${img(r.actual,'','width:26px;height:26px;object-fit:contain')}
-          <span class="rbadge ${hit?'hit':'miss'}">${hit?'✓ HIT':'✗ MISS'}</span>
+          <span class="rbadge ${r.hit?'hit':'miss'}">${r.hit?'✓ HIT':'✗ MISS'}</span>
         </div>
       </div>`;
     }).join('');
-
     prevHTML = `
       <div class="prev-section-hdr">📊 Yesterday · ${prevDay.date||'Previous Day'}</div>
       ${statsGrid}
-      <div class="pdist-card">
-        <div class="pdist-title">Planet Distribution</div>
-        ${distRows}
-      </div>
-      ${sampleRows ? `<div class="prev-results-card">
-        <div class="prev-results-title">Sample Results</div>
-        <div class="rlist">${sampleRows}</div>
-      </div>` : ''}`;
+      <div class="pdist-card"><div class="pdist-title">Planet Distribution</div>${distRows}</div>
+      ${sampleRows ? `<div class="prev-results-card"><div class="prev-results-title">Sample Results</div><div class="rlist">${sampleRows}</div></div>` : ''}`;
   }
 
   return `
@@ -669,7 +701,6 @@ function buildWaitingHTML(modeData, prevDay) {
         <div class="wait-title">${waitTitle}</div>
         <div class="wait-sub">${waitSub}</div>
       </div>
-
       <div class="countdown-card">
         <div class="cd-label">Starts In</div>
         <div class="cd-display">
@@ -680,9 +711,7 @@ function buildWaitingHTML(modeData, prevDay) {
           <div class="cd-unit"><span class="cd-num" id="wcd-s">${ss}</span><span class="cd-lbl">SEC</span></div>
         </div>
       </div>
-
       <div class="wait-planets-row">${planets}</div>
-
       ${prevHTML}
       <div class="disc">DATA SHOWN IS FROM PREVIOUS DAY · SYSTEM WARMING UP</div>
     </div>`;
@@ -702,12 +731,12 @@ function startWaitCountdown(secsLeft) {
     if (rem === 0) {
       clearInterval(_waitCdInterval);
       _waitCdInterval = null;
-      _currentMode = null;  // force full re-render on next tick
+      _currentMode = null; // force re-render on next tick
     }
   }, 1000);
 }
 
-/* ── MAIN REFRESH ───────────────────────────────────────────────────────── */
+// ── MAIN REFRESH ─────────────────────────────────────────────────────────────
 async function doRefresh() {
   let modeData = { mode: 'live', secs_left: 0 };
   try {
@@ -716,11 +745,9 @@ async function doRefresh() {
   } catch(e) { console.warn('Mode fetch failed:', e); }
 
   if (modeData.mode !== 'live') {
-    // Update status pill
     document.getElementById('statusText').textContent =
       modeData.mode === 'cooldown' ? '🌙 Cooldown' : '⏳ Warming Up';
 
-    // Only rebuild HTML when mode first changes (avoid resetting countdown every 5s)
     if (_currentMode !== modeData.mode) {
       _currentMode = modeData.mode;
       let prevDay = null;
@@ -731,52 +758,52 @@ async function doRefresh() {
       document.getElementById('app').innerHTML = buildWaitingHTML(modeData, prevDay);
       startWaitCountdown(modeData.secs_left || 0);
     }
-    countdown = 30;  // slow refresh during waiting
+    countdown = 30;
   } else {
-    // Live mode — clear waiting interval if any
     if (_waitCdInterval) { clearInterval(_waitCdInterval); _waitCdInterval = null; }
     _currentMode = 'live';
     await refreshAll();
-    countdown = 5;   // normal 5-second refresh
+    countdown = 5;
   }
 }
 
-async function refreshAll(){
-  try{
-    document.getElementById('statusText').textContent='Refreshing...';
-    const [pR,sR,hR,stR]=await Promise.all([
-      fetch('/api/predict'),fetch('/api/stats'),
-      fetch('/api/history'),fetch('/api/status'),
+async function refreshAll() {
+  try {
+    document.getElementById('statusText').textContent = 'Refreshing...';
+    const [pR,sR,hR,stR] = await Promise.all([
+      fetch('/api/predict'), fetch('/api/stats'),
+      fetch('/api/history'), fetch('/api/status'),
     ]);
-    if(!pR.ok)throw new Error('Not ready');
-    const [pred,stats,history,status]=await Promise.all([
-      pR.json(),sR.json(),hR.json(),stR.ok?stR.json():{},
+    if (!pR.ok) throw new Error('Not ready');
+    const [pred,stats,history,status] = await Promise.all([
+      pR.json(), sR.json(), hR.json(), stR.ok ? stR.json() : {},
     ]);
-    buildUI(pred,stats,history,status);
-    document.getElementById('statusText').textContent='Live';
-    countdown=5;
-  }catch(e){
-    document.getElementById('statusText').textContent='Error';
+    buildUI(pred, stats, history, status);
+    document.getElementById('statusText').textContent = 'Live';
+    countdown = 5;
+  } catch(e) {
+    document.getElementById('statusText').textContent = 'Error';
     console.error(e);
   }
 }
 
+// ── LAUNCH APP ───────────────────────────────────────────────────────────────
 function launchApp() {
   showScreen('s-app');
   cdEl = document.getElementById('cdNum');
   doRefresh();
-  setInterval(()=>{
+  setInterval(() => {
     countdown--;
     const el = document.getElementById('cdNum');
-    if(el) el.textContent = Math.max(0, countdown);
-    if(countdown<=0){ doRefresh(); }
-  },1000);
+    if (el) el.textContent = Math.max(0, countdown);
+    if (countdown <= 0) { countdown = 5; doRefresh(); }
+  }, 1000);
 }
 
-function buildUI(pred,stats,history,status){
+// ── BUILD UI ─────────────────────────────────────────────────────────────────
+function buildUI(pred, stats, history, status) {
   const isPlay = pred.action === 'PLAY';
   const bonus  = pred.bonus_picks || null;
-  // skip_show_bonus_only: true when SKIP + bonus exists → hide main picks, show bonus only
   const skipBonusOnly = pred.skip_show_bonus_only === true;
   const p1=pred.pred1, p2=pred.pred2, p3=pred.pred3||null;
   const c1=COLORS[p1]||'#fff', c2=COLORS[p2]||'#fff', c3=p3?(COLORS[p3]||'#fff'):null;
@@ -790,11 +817,8 @@ function buildUI(pred,stats,history,status){
     </div>`;
 
   let bannerSub = '';
-  if (isPlay) {
-    bannerSub = has3 ? 'Choose any planet below' : 'Choose either planet below';
-  } else {
-    bannerSub = pred.skip_reason || '';
-  }
+  if (isPlay) { bannerSub = has3 ? 'Choose any planet below' : 'Choose either planet below'; }
+  else { bannerSub = pred.skip_reason || ''; }
 
   const abanner = `
     <div class="abanner ${isPlay?'play':'skip'}">
@@ -805,11 +829,9 @@ function buildUI(pred,stats,history,status){
       </div>
     </div>`;
 
-  // Main picks: hidden on SKIP when bonus exists
   let picksHTML = '';
   if (!skipBonusOnly) {
     const sm = has3 ? 'sm' : '';
-    const orSm = has3 ? 'sm' : '';
     picksHTML = `
       <div class="picks">
         <div class="ppick">
@@ -821,7 +843,7 @@ function buildUI(pred,stats,history,status){
           <div class="pname ${sm}" style="color:${c1}">${NAMES[p1]||p1}</div>
           <div class="pconf">${pred.pred1_conf||0}%</div>
         </div>
-        <div class="picks-or ${orSm}">OR</div>
+        <div class="picks-or ${sm}">OR</div>
         <div class="ppick">
           <div class="ppick-rank">Pick 2</div>
           <div class="planet-wrap ${sm}">
@@ -832,7 +854,7 @@ function buildUI(pred,stats,history,status){
           <div class="pconf">${pred.pred2_conf||0}%</div>
         </div>
         ${has3 ? `
-        <div class="picks-or ${orSm}">OR</div>
+        <div class="picks-or ${sm}">OR</div>
         <div class="ppick">
           <div class="ppick-rank">Pick 3</div>
           <div class="planet-wrap ${sm}">
@@ -845,7 +867,6 @@ function buildUI(pred,stats,history,status){
       </div>`;
   }
 
-  // Bonus section: shown for PLAY normally, shown for SKIP when skipBonusOnly
   let bonusHTML = '';
   if (bonus && bonus.length && (isPlay || skipBonusOnly)) {
     const b1=bonus[0], b2=bonus[1]||null;
@@ -990,14 +1011,15 @@ function buildUI(pred,stats,history,status){
     </div>`:''}
     <div class="disc">PREDICTIONS ARE PROBABILISTIC · NOT FINANCIAL ADVICE</div>`;
 
-  cdEl=document.getElementById('cdNum');
-  if(lastRound&&pred.latest_round>lastRound){
-    const el=document.querySelector('.arena');
-    if(el){el.style.boxShadow='0 0 70px rgba(255,215,0,0.22)';setTimeout(()=>el.style.boxShadow='',2200);}
+  cdEl = document.getElementById('cdNum');
+  if (lastRound && pred.latest_round > lastRound) {
+    const el = document.querySelector('.arena');
+    if (el) { el.style.boxShadow='0 0 70px rgba(255,215,0,0.22)'; setTimeout(()=>el.style.boxShadow='',2200); }
   }
-  lastRound=pred.latest_round;
+  lastRound = pred.latest_round;
 }
 
+// ── SERVICE WORKER ───────────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/pwa/sw.js', { scope: '/' }).catch(console.warn);
 }
