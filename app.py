@@ -38,10 +38,6 @@ RESET_MINUTE_IST = 30
 IST              = pytz.timezone("Asia/Kolkata")
 
 # ── COOLDOWN / WARMUP / LIVE SCHEDULE ─────────────────────────────────────────
-# 05:30 – 08:30  → cooldown   (reset happened, model data loading)
-# 08:30 – 16:00  → warmup     (model plays internally, NOT shown to user)
-# 16:00 – 05:30  → live       (show everything to user)
-# NOTE: Change LIVE_START_HOUR back to 11 for production (currently 16 for testing)
 COOLDOWN_END_HOUR   = 8
 COOLDOWN_END_MINUTE = 30
 LIVE_START_HOUR     = 16   # ← change to 11 for production
@@ -142,18 +138,46 @@ CLUSTER_REDUCTION_STEP  = 0.07
 CLUSTER_REDUCTION_MAX   = 0.30
 
 # ── STREAK DETECTOR CONFIG ────────────────────────────────────────────────────
-# FIX: Boost a class that has been streaking recently so the model
-#      adapts to local regime shifts faster than the Markov/history weights.
-STREAK_WINDOW    = 5    # look at last N rounds
-STREAK_MIN       = 3    # min occurrences in that window to trigger boost
-STREAK_BOOST_PER = 0.10 # boost multiplier per extra occurrence above STREAK_MIN
+STREAK_WINDOW    = 5
+STREAK_MIN       = 3
+STREAK_BOOST_PER = 0.10
 
 # ── NOISE / MISS-SUPPRESS CONFIG ─────────────────────────────────────────────
 MISS_SUPPRESS_WINDOW    = 3
 MISS_SUPPRESS_PENALTY   = 0.25
 NOISE_WINDOW            = 7
-NOISE_UNIQUE_THRESH     = 6    # FIX: was 5 — harder to trigger noise-flattening
-NOISE_SCORE_FLATTEN     = 0.20 # FIX: was 0.30 — less aggressive flattening
+NOISE_UNIQUE_THRESH     = 6
+NOISE_SCORE_FLATTEN     = 0.20
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── NEW: PATTERN MEMORY CONFIG ───────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+PMEM_FP_LEN         = 6      # fingerprint length (last N classes)
+PMEM_MATCH_LEN      = 5      # how many of those to match in history
+PMEM_MAX_MATCHES    = 20     # max historical matches to consider
+PMEM_BOOST_WEIGHT   = 0.18   # how strongly pattern-memory adjusts scores
+PMEM_MIN_MATCHES    = 3      # minimum matches to trust the signal
+
+# ── NEW: REGIME DETECTOR CONFIG ──────────────────────────────────────────────
+REGIME_WINDOW_SHORT  = 12    # short hitrate window
+REGIME_WINDOW_LONG   = 40    # long hitrate window
+REGIME_ENTROPY_WIN   = 10    # entropy history window for spike detection
+REGIME_DIST_WIN      = 30    # class distribution window
+REGIME_WEIRD_THRESH  = 0.18  # hitrate diff (short vs long) that triggers "weird"
+REGIME_ENTROPY_SPIKE = 0.45  # entropy increase above rolling avg = spike
+REGIME_DIST_THRESH   = 0.22  # class distribution KL-div threshold for "shifted"
+
+# ── NEW: ANTI-PATTERN / ADVERSARIAL SHIFT CONFIG ─────────────────────────────
+ANTI_CONSEC_MISS     = 4     # consecutive misses to trigger adversarial shift
+ANTI_MISS_WINDOW     = 6     # window to check for consecutive misses
+ANTI_ULTA_WINDOW     = 8     # window to detect "consistently opposite" pattern
+ANTI_ULTA_THRESH     = 0.70  # fraction of actuals that are NOT in our top2 predictions
+
+# ── NEW: SMART SKIP REASONING CONFIG ─────────────────────────────────────────
+SKIP_REASON_WINDOW   = 10    # look back N rounds of skip decisions
+SKIP_FORCE_PLAY_MISS = 5     # if we skipped N times and those rounds actual would've been hits, force play
+SKIP_REGIME_OVERRIDE = True  # allow regime to force play even when entropy says skip
+SKIP_ANTI_OVERRIDE   = True  # allow anti-pattern to override skip
 
 # ── GLOBAL STATE ──────────────────────────────────────────────────────────────
 _lock              = threading.Lock()
@@ -173,29 +197,29 @@ _fetch_status = {
     "status": "starting", "last_reset": None,
 }
 
-_entropy_threshold     = SKIP_ENTROPY_THRESHOLD   # protected by _lock
-_top1_threshold        = SKIP_TOP1_THRESHOLD       # protected by _lock
-_consec_entropy_skips  = 0                         # protected by _lock
+_entropy_threshold     = SKIP_ENTROPY_THRESHOLD
+_top1_threshold        = SKIP_TOP1_THRESHOLD
+_consec_entropy_skips  = 0
 
 # ── PATTERN STATE ─────────────────────────────────────────────────────────────
 _hit_pattern_scores  = {g: [] for g in PATTERN_GROUPS}
 _dynamic_threshold   = {g: PATTERN_GROUPS[g]["default_threshold"] for g in PATTERN_GROUPS}
 _last_pattern_info   = {}
-_dynamic_lookback    = PATTERN_LOOKBACK_DEFAULT    # protected by _lock
-_dynamic_decay       = PATTERN_DECAY_DEFAULT       # protected by _lock
-_dynamic_boost_max   = PATTERN_BOOST_MAX_DEFAULT   # protected by _lock
-_dynamic_boost_min   = PATTERN_BOOST_MIN_DEFAULT   # protected by _lock
+_dynamic_lookback    = PATTERN_LOOKBACK_DEFAULT
+_dynamic_decay       = PATTERN_DECAY_DEFAULT
+_dynamic_boost_max   = PATTERN_BOOST_MAX_DEFAULT
+_dynamic_boost_min   = PATTERN_BOOST_MIN_DEFAULT
 
 _boost_eval_log      = []
 
 # ── DYNAMIC BRAKE STATE ───────────────────────────────────────────────────────
-_dynamic_brake_trigger = BRAKE_TRIGGER_DEFAULT     # protected by _lock
-_dynamic_brake_pause   = BRAKE_PAUSE_DEFAULT       # protected by _lock
+_dynamic_brake_trigger = BRAKE_TRIGGER_DEFAULT
+_dynamic_brake_pause   = BRAKE_PAUSE_DEFAULT
 _brake_play_results    = []
 _brake_loss_confs      = []
 
 # ── DYNAMIC TRAIN_ROUNDS STATE ────────────────────────────────────────────────
-_dynamic_train_rounds  = TRAIN_ROUNDS_DEFAULT      # protected by _lock
+_dynamic_train_rounds  = TRAIN_ROUNDS_DEFAULT
 
 # ── DYNAMIC MARKOV WEIGHTS STATE ─────────────────────────────────────────────
 _markov_hit_buf = {1: [], 2: [], 3: [], 4: []}
@@ -206,12 +230,12 @@ _dynamic_markov_w = {
     "wm3": 0.28,
     "wm4": 0.22,
     "wr":  0.08,
-    "wv":  0.12,  # FIX: was 0.04 — tripled to give recent window more influence
+    "wv":  0.12,
     "wo":  0.03,
 }
 
 # ── DYNAMIC BONUS THRESHOLD STATE ────────────────────────────────────────────
-_dynamic_bonus_thresh  = BONUS_CONF_THRESH_DEFAULT  # protected by _lock
+_dynamic_bonus_thresh  = BONUS_CONF_THRESH_DEFAULT
 _bonus_eval_log        = []
 
 # ── PER-CLASS BONUS MISS STATE ────────────────────────────────────────────────
@@ -222,6 +246,27 @@ BONUS_CLASS_BUF_MAX    = 20
 _play_history: list = []
 PLAY_HISTORY_MAX = 20
 
+# ══════════════════════════════════════════════════════════════════════════════
+# ── NEW: REASONING ENGINE STATE ──────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+_regime_state = {
+    "mode":           "normal",   # "normal" | "weird" | "hostile"
+    "reason":         "",
+    "entropy_history": [],
+    "hitrate_short":   None,
+    "hitrate_long":    None,
+    "dist_shift":      False,
+    "last_updated":    0,
+}
+_anti_pattern_state = {
+    "active":          False,
+    "consec_misses":   0,
+    "ulta_detected":   False,
+    "forced_classes":  [],
+    "last_updated":    0,
+}
+_skip_reason_log = []   # list of {"would_play": bool, "actual": int, "hit_if_played": bool}
+_reasoning_last  = {}   # last full reasoning dump for API
 
 # ── THREAD-SAFE SCALAR HELPERS ────────────────────────────────────────────────
 def _get_entropy_threshold():
@@ -279,6 +324,7 @@ def _should_reset():
 def _do_reset():
     global _last_reset_date, _pending_pred, _cached_pred
     global _dynamic_boost_max, _dynamic_boost_min
+    global _regime_state, _anti_pattern_state, _skip_reason_log, _reasoning_last
 
     now_ist = datetime.now(IST)
     print(f"[Reset] 5:30 AM IST — wiping data ({now_ist.date()})")
@@ -303,7 +349,6 @@ def _do_reset():
         _play_history.clear()
         for cls in HIGH_MULT_CLASSES:
             _bonus_class_results[cls].clear()
-        # Reset all protected scalars under lock
         global _entropy_threshold, _top1_threshold, _consec_entropy_skips
         global _dynamic_train_rounds, _dynamic_brake_trigger, _dynamic_brake_pause
         global _dynamic_lookback, _dynamic_decay, _dynamic_bonus_thresh
@@ -319,17 +364,29 @@ def _do_reset():
         _dynamic_boost_min     = PATTERN_BOOST_MIN_DEFAULT
         _dynamic_bonus_thresh  = BONUS_CONF_THRESH_DEFAULT
 
+        # Reset reasoning engine state
+        _regime_state.update({
+            "mode": "normal", "reason": "", "entropy_history": [],
+            "hitrate_short": None, "hitrate_long": None,
+            "dist_shift": False, "last_updated": 0,
+        })
+        _anti_pattern_state.update({
+            "active": False, "consec_misses": 0,
+            "ulta_detected": False, "forced_classes": [], "last_updated": 0,
+        })
+        _skip_reason_log.clear()
+        _reasoning_last.clear()
+
     _last_reset_date = now_ist.date()
     print("[Reset] All data cleared.")
 
 # ── MODE HELPERS ──────────────────────────────────────────────────────────────
 def get_current_mode():
-    """Returns 'cooldown', 'warmup', or 'live' based on current IST time."""
     now = datetime.now(IST)
     total_min   = now.hour * 60 + now.minute
-    reset_min   = RESET_HOUR_IST   * 60 + RESET_MINUTE_IST    # 330  (05:30)
-    coolend_min = COOLDOWN_END_HOUR * 60 + COOLDOWN_END_MINUTE # 510  (08:30)
-    live_min    = LIVE_START_HOUR   * 60 + LIVE_START_MINUTE   # 960  (16:00)
+    reset_min   = RESET_HOUR_IST   * 60 + RESET_MINUTE_IST
+    coolend_min = COOLDOWN_END_HOUR * 60 + COOLDOWN_END_MINUTE
+    live_min    = LIVE_START_HOUR   * 60 + LIVE_START_MINUTE
     if reset_min <= total_min < coolend_min:
         return "cooldown"
     elif coolend_min <= total_min < live_min:
@@ -338,20 +395,15 @@ def get_current_mode():
         return "live"
 
 def _prev_day_fake():
-    """Generate deterministic fake previous-day data for cooldown/warmup screen."""
     import random
     now_ist = datetime.now(IST)
-    # seed = today's date so data is stable all day but changes each day
     seed = int(now_ist.strftime("%Y%m%d"))
     rng  = random.Random(seed)
-
     total    = rng.randint(188, 218)
     played   = int(total * rng.uniform(0.47, 0.54))
     hits     = int(played * rng.uniform(0.61, 0.72))
     misses   = played - hits
     accuracy = round(hits / played * 100, 1) if played else 0
-
-    # Planet distribution — small-mult more frequent (mirrors real distribution)
     base  = {1:17, 5:18, 6:16, 8:15, 2:11, 4:9, 3:7, 7:4}
     noise = {k: base[k] + rng.uniform(-3, 3) for k in base}
     tot_w = sum(noise.values())
@@ -365,11 +417,8 @@ def _prev_day_fake():
             cnt = max(1, int(total * w / tot_w))
             dist[str(cls)] = cnt
             rem -= cnt
-
     max_win  = rng.randint(3, 9)
     max_loss = rng.randint(2, 5)
-
-    # 15 sample played rounds
     small = [1, 5, 6, 8]
     results = []
     for i in range(15):
@@ -383,7 +432,6 @@ def _prev_day_fake():
             "round": 4990 + i, "pred1": p1, "pred2": p2,
             "actual": actual,  "hit":   actual in (p1, p2),
         })
-
     from datetime import timedelta
     prev_date = (now_ist - timedelta(days=1)).strftime("%d %b %Y")
     return {
@@ -513,7 +561,7 @@ def recalibrate_pattern_params(total_rounds, sim_hit_rate):
     global _dynamic_lookback, _dynamic_decay
     with _lock:
         cur_decay = _dynamic_decay
-    new_lookback = 7  # fixed at 7
+    new_lookback = 7
     if sim_hit_rate < 0.50:
         new_decay = max(PATTERN_DECAY_MIN, cur_decay - 0.03)
     elif sim_hit_rate > 0.68:
@@ -553,8 +601,7 @@ def recalibrate_boost_cap(boost_eval_log):
         new_min = cur_min
     if abs(new_max - cur_max) > 0.001:
         print(f"[BoostCap] max: {cur_max:.3f}→{new_max:.3f} "
-              f"(boosted={boosted_rate:.2%} unboosted={unboosted_rate:.2%}, "
-              f"n_b={len(boosted_hits)} n_u={len(unboosted_hits)})")
+              f"(boosted={boosted_rate:.2%} unboosted={unboosted_rate:.2%})")
     with _lock:
         _dynamic_boost_max = new_max
         _dynamic_boost_min = new_min
@@ -581,9 +628,7 @@ def recalibrate_bonus_thresh(bonus_eval_log):
     else:
         new_thresh = cur
     if abs(new_thresh - cur) > 0.0001:
-        print(f"[BonusThresh] {cur:.4f}→{new_thresh:.4f} "
-              f"(bonus_hr={bonus_hit_rate:.2%} base_hr={no_bonus_hit_rate:.2%}, "
-              f"n={len(bonus_rounds)})")
+        print(f"[BonusThresh] {cur:.4f}→{new_thresh:.4f}")
     with _lock:
         _dynamic_bonus_thresh = new_thresh
 
@@ -605,26 +650,13 @@ def _record_bonus_class_result(bonus_picks, actual_val):
             _bonus_class_results[actual_val].append(True)
             if len(_bonus_class_results[actual_val]) > BONUS_CLASS_BUF_MAX:
                 _bonus_class_results[actual_val].pop(0)
-            print(f"[BonusSuppress] Class {actual_val} ({CLASS_NAMES.get(actual_val,'?')}) "
-                  f"appeared organically — suppression buffer updated with HIT.")
-
         if not bonus_picks:
             return
-
         for cls in bonus_picks:
             hit = (actual_val == cls)
             _bonus_class_results[cls].append(hit)
             if len(_bonus_class_results[cls]) > BONUS_CLASS_BUF_MAX:
                 _bonus_class_results[cls].pop(0)
-            if not hit:
-                recent = _bonus_class_results[cls][-BONUS_CLASS_MISS_WINDOW:]
-                if len(recent) == BONUS_CLASS_MISS_WINDOW and not any(recent):
-                    print(f"[BonusSuppress] Class {cls} ({CLASS_NAMES.get(cls,'?')}) "
-                          f"suppressed after {BONUS_CLASS_MISS_WINDOW} consecutive "
-                          f"bonus-specific misses.")
-            else:
-                print(f"[BonusSuppress] Class {cls} ({CLASS_NAMES.get(cls,'?')}) "
-                      f"bonus HIT — suppression cleared.")
 
 # ── PATTERN DETECTOR ─────────────────────────────────────────────────────────
 def compute_pattern_scores(rewards):
@@ -644,20 +676,14 @@ def update_pattern_hit(group_name, pattern_score):
     buf.append(pattern_score)
     if len(buf) > PATTERN_HIT_BUFFER:
         buf.pop(0)
-
     avg_hit_score = sum(buf) / len(buf) if buf else PATTERN_GROUPS[group_name]["default_threshold"]
-
     default_thresh = PATTERN_GROUPS[group_name]["default_threshold"]
     new_threshold = avg_hit_score * 0.75 + default_thresh * 0.25
     _dynamic_threshold[group_name] = new_threshold
-
-    print(f"[Pattern] Group '{group_name}' hit recorded. "
-          f"score={pattern_score:.4f} "
-          f"new_threshold={new_threshold:.4f} "
-          f"(buffer={len(buf)})")
+    print(f"[Pattern] Group '{group_name}' hit recorded. score={pattern_score:.4f} "
+          f"new_threshold={new_threshold:.4f} (buffer={len(buf)})")
 
 def update_pattern_miss(group_name, pattern_score):
-    """Allow downward threshold pressure on miss."""
     cur = _dynamic_threshold[group_name]
     default_thresh = PATTERN_GROUPS[group_name]["default_threshold"]
     new_threshold = cur * 0.97 + default_thresh * 0.03
@@ -691,7 +717,7 @@ def recalibrate_brake(play_results, loss_confs):
             new_pause = max(BRAKE_PAUSE_MIN, cur_pause - BRAKE_PAUSE_STEP)
         if new_pause != cur_pause:
             print(f"[DynBrake] Pause: {cur_pause}→{new_pause} "
-                  f"(avg_loss_conf={avg_conf:.4f}, buffer={len(window_confs)})")
+                  f"(avg_loss_conf={avg_conf:.4f})")
     return new_trigger, new_pause, hitrate, avg_conf
 
 # ── TOP1 THRESHOLD ADAPTATION ────────────────────────────────────────────────
@@ -724,13 +750,336 @@ def _compute_cluster_reduction():
         return reduction, high_mult_count
     return 0.0, high_mult_count
 
-def _is_penalty_forced(ent):
-    eth = _get_entropy_threshold()
-    penalty = _compute_entropy_penalty()
-    if penalty <= 0:
-        return False
-    effective_ent = ent - penalty
-    return ent >= eth and effective_ent < eth
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── NEW: PATTERN MEMORY ENGINE ───────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+
+def pattern_memory_adjust(rewards, base_scores):
+    """
+    Look up the last PMEM_FP_LEN classes as a fingerprint.
+    Find historical occurrences of the same sequence.
+    Compute what actually came after those sequences.
+    Boost those classes in base_scores proportionally.
+    Returns (adjusted_scores, memory_info_dict)
+    """
+    n = len(rewards)
+    if n < PMEM_FP_LEN + 2:
+        return base_scores, {"active": False, "matches": 0, "boost": {}}
+
+    fp = tuple(rewards[-(PMEM_MATCH_LEN):])   # last PMEM_MATCH_LEN as fingerprint
+    fp_len = len(fp)
+
+    # Search history for the same fingerprint (exclude last occurrence = current)
+    next_class_counts = Counter()
+    matches = 0
+    search_end = n - fp_len - 1   # don't include the current position
+    for i in range(search_end):
+        candidate = tuple(rewards[i:i+fp_len])
+        if candidate == fp:
+            # what came after this?
+            what_came = rewards[i + fp_len]
+            next_class_counts[what_came] += 1
+            matches += 1
+            if matches >= PMEM_MAX_MATCHES:
+                break
+
+    if matches < PMEM_MIN_MATCHES:
+        return base_scores, {"active": False, "matches": matches, "boost": {}}
+
+    total_next = sum(next_class_counts.values())
+    mem_prob   = {cls: cnt / total_next for cls, cnt in next_class_counts.items()}
+
+    # Blend: base_scores * (1 - PMEM_BOOST_WEIGHT) + mem_prob * PMEM_BOOST_WEIGHT
+    adjusted = dict(base_scores)
+    for cls in range(1, 9):
+        base   = base_scores.get(cls, 0.0)
+        mem    = mem_prob.get(cls, 0.0)
+        adjusted[cls] = base * (1.0 - PMEM_BOOST_WEIGHT) + mem * PMEM_BOOST_WEIGHT
+
+    # Renormalize
+    ts = sum(adjusted.values()) or 1.0
+    adjusted = {k: v / ts for k, v in adjusted.items()}
+
+    boost_info = {str(cls): round(mem_prob.get(cls, 0.0) * 100, 2) for cls in next_class_counts}
+    top_mem = sorted(next_class_counts.items(), key=lambda x: -x[1])[:3]
+
+    print(f"[PatternMem] fp={fp} matches={matches} "
+          f"top_next={[(CLASS_NAMES.get(c,'?'), cnt) for c, cnt in top_mem]}")
+
+    return adjusted, {
+        "active":      True,
+        "matches":     matches,
+        "fingerprint": list(fp),
+        "boost":       boost_info,
+        "top_predicted": [CLASS_NAMES.get(c, str(c)) for c, _ in top_mem],
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── NEW: REGIME DETECTOR ─────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+
+def update_regime(rewards, play_history, current_entropy):
+    """
+    Detect current game regime: normal / weird / hostile.
+    Updates _regime_state in place.
+    """
+    global _regime_state
+    n = len(rewards)
+    reasons = []
+    mode    = "normal"
+
+    # 1. Hitrate comparison (short vs long window)
+    ph = play_history
+    hitrate_short = None
+    hitrate_long  = None
+    if len(ph) >= REGIME_WINDOW_SHORT:
+        short_w       = ph[-REGIME_WINDOW_SHORT:]
+        hitrate_short = sum(e["hit"] for e in short_w) / len(short_w)
+    if len(ph) >= REGIME_WINDOW_LONG:
+        long_w        = ph[-REGIME_WINDOW_LONG:]
+        hitrate_long  = sum(e["hit"] for e in long_w) / len(long_w)
+
+    if hitrate_short is not None and hitrate_long is not None:
+        diff = hitrate_long - hitrate_short   # positive = we're doing worse recently
+        if diff > REGIME_WEIRD_THRESH:
+            mode = "weird"
+            reasons.append(f"hitrate drop: recent={hitrate_short:.2%} vs avg={hitrate_long:.2%}")
+        if hitrate_short < 0.35:
+            mode = "hostile"
+            reasons.append(f"critically low hitrate: {hitrate_short:.2%}")
+
+    # 2. Entropy spike detection
+    with _lock:
+        ent_hist = list(_regime_state.get("entropy_history", []))
+    ent_hist.append(current_entropy)
+    if len(ent_hist) > REGIME_ENTROPY_WIN * 3:
+        ent_hist = ent_hist[-(REGIME_ENTROPY_WIN * 3):]
+
+    if len(ent_hist) >= REGIME_ENTROPY_WIN:
+        avg_ent = sum(ent_hist[-REGIME_ENTROPY_WIN:]) / REGIME_ENTROPY_WIN
+        if current_entropy > avg_ent + REGIME_ENTROPY_SPIKE:
+            if mode == "normal":
+                mode = "weird"
+            reasons.append(f"entropy spike: {current_entropy:.3f} vs avg {avg_ent:.3f}")
+
+    # 3. Class distribution shift
+    dist_shift = False
+    if n >= REGIME_DIST_WIN * 2:
+        recent  = Counter(rewards[-REGIME_DIST_WIN:])
+        older   = Counter(rewards[-(REGIME_DIST_WIN * 2):-REGIME_DIST_WIN])
+        all_cls = set(range(1, 9))
+        # Simple KL-divergence approximation
+        kl = 0.0
+        total_r = sum(recent.values())
+        total_o = sum(older.values())
+        for cls in all_cls:
+            p = recent.get(cls, 0.5) / total_r
+            q = older.get(cls, 0.5) / total_o
+            if p > 0 and q > 0:
+                kl += p * math.log(p / q)
+        if kl > REGIME_DIST_THRESH:
+            dist_shift = True
+            if mode == "normal":
+                mode = "weird"
+            reasons.append(f"class distribution shifted (KL={kl:.3f})")
+
+    regime_reason = "; ".join(reasons) if reasons else "all normal"
+    with _lock:
+        _regime_state["mode"]            = mode
+        _regime_state["reason"]          = regime_reason
+        _regime_state["entropy_history"] = ent_hist
+        _regime_state["hitrate_short"]   = hitrate_short
+        _regime_state["hitrate_long"]    = hitrate_long
+        _regime_state["dist_shift"]      = dist_shift
+        _regime_state["last_updated"]    = int(time.time())
+
+    if mode != "normal":
+        print(f"[Regime] Mode={mode} — {regime_reason}")
+
+    return mode, regime_reason
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── NEW: ANTI-PATTERN / ADVERSARIAL SHIFT ────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+
+def update_anti_pattern(play_history):
+    """
+    Detect if we're stuck in an adversarial pattern:
+    - Consecutive misses
+    - Actual results consistently landing OUTSIDE our predictions
+    Updates _anti_pattern_state.
+    """
+    global _anti_pattern_state
+    ph = play_history
+
+    if len(ph) < 4:
+        with _lock:
+            _anti_pattern_state["active"]        = False
+            _anti_pattern_state["consec_misses"]  = 0
+            _anti_pattern_state["ulta_detected"]  = False
+            _anti_pattern_state["forced_classes"] = []
+        return False, []
+
+    # Consecutive misses
+    consec = 0
+    for e in reversed(ph):
+        if not e["hit"]:
+            consec += 1
+        else:
+            break
+    consec = min(consec, ANTI_MISS_WINDOW)
+
+    # "Ulta" detection: how often does actual fall outside our predictions?
+    window_ph = ph[-ANTI_ULTA_WINDOW:]
+    outside   = sum(1 for e in window_ph if not e["hit"])
+    ulta_rate = outside / len(window_ph)
+    ulta_detected = ulta_rate >= ANTI_ULTA_THRESH
+
+    active = (consec >= ANTI_CONSEC_MISS) or ulta_detected
+
+    forced_classes = []
+    if active:
+        # Find classes that actual results have been landing on
+        # (the ones we've been consistently NOT picking)
+        all_actual     = [e["actual"]                 for e in window_ph]
+        all_pred_sets  = [set([e["pred1"], e["pred2"]]) for e in window_ph]
+        missed_actuals = [
+            actual for actual, preds in zip(all_actual, all_pred_sets)
+            if actual not in preds
+        ]
+        if missed_actuals:
+            top_missed = Counter(missed_actuals).most_common(3)
+            forced_classes = [cls for cls, _ in top_missed]
+            print(f"[AntiPattern] active=True consec_misses={consec} "
+                  f"ulta_rate={ulta_rate:.2%} "
+                  f"force_classes={[CLASS_NAMES.get(c,'?') for c in forced_classes]}")
+
+    with _lock:
+        _anti_pattern_state["active"]        = active
+        _anti_pattern_state["consec_misses"]  = consec
+        _anti_pattern_state["ulta_detected"]  = ulta_detected
+        _anti_pattern_state["forced_classes"] = forced_classes
+        _anti_pattern_state["last_updated"]   = int(time.time())
+
+    return active, forced_classes
+
+
+def apply_anti_pattern_to_scores(scores, forced_classes, regime_mode):
+    """
+    Boost scores for classes that actuals have been landing on.
+    More aggressive in hostile regime.
+    """
+    if not forced_classes:
+        return scores
+
+    boost_factor = 0.25 if regime_mode == "normal" else 0.40
+    adjusted = dict(scores)
+    for cls in forced_classes:
+        adjusted[cls] = adjusted.get(cls, 0.0) * (1.0 + boost_factor)
+
+    ts = sum(adjusted.values()) or 1.0
+    adjusted = {k: v / ts for k, v in adjusted.items()}
+    print(f"[AntiPattern] Score boost applied for "
+          f"{[CLASS_NAMES.get(c,'?') for c in forced_classes]} factor={boost_factor:.2f}")
+    return adjusted
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── NEW: SMART SKIP REASONER ─────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+
+def smart_skip_decision(base_play_signal, ent, t1s, brake_active,
+                        regime_mode, anti_active, forced_classes,
+                        effective_ent, eth):
+    """
+    Final skip/play decision that incorporates regime and anti-pattern context.
+
+    Returns (should_play, skip_reason, reasoning_notes)
+    """
+    reasoning_notes = []
+    skip_reason     = None
+
+    # Hard blocks — always skip
+    if brake_active:
+        return False, "Loss brake active", ["brake override — hard skip"]
+
+    # Base signal from entropy + top1
+    entropy_ok = effective_ent < eth
+    conf_ok    = t1s > _get_top1_threshold()
+
+    # ── Regime-based adjustments ──────────────────────────────────────────────
+    if regime_mode == "hostile":
+        # In hostile mode: only play if BOTH entropy AND confidence are strongly ok
+        entropy_ok = ent < (eth - 0.15)   # stricter entropy
+        conf_ok    = t1s > (_get_top1_threshold() + 0.02)   # stricter confidence
+        reasoning_notes.append("hostile regime: tightened thresholds")
+
+    elif regime_mode == "weird":
+        # In weird mode: loosen entropy slightly to keep playing but require conf
+        if not entropy_ok and SKIP_REGIME_OVERRIDE:
+            # If entropy is the only reason to skip and regime is weird,
+            # check if anti-pattern forced classes are trustworthy
+            if anti_active and len(forced_classes) >= 2:
+                entropy_ok = True
+                reasoning_notes.append("weird regime + anti-pattern: entropy override")
+            else:
+                reasoning_notes.append("weird regime: entropy skip maintained")
+
+    # ── Anti-pattern override ─────────────────────────────────────────────────
+    if anti_active and SKIP_ANTI_OVERRIDE and not brake_active:
+        if not conf_ok and len(forced_classes) >= 2:
+            # Anti-pattern has strong signal — lower confidence bar
+            conf_ok = t1s > (TOP1_THRESH_MIN)
+            reasoning_notes.append(f"anti-pattern override: conf bar lowered")
+
+    # ── Missed opportunity tracker ────────────────────────────────────────────
+    # If we've been skipping rounds and those would have been hits, consider playing
+    with _lock:
+        skip_log = list(_skip_reason_log[-SKIP_REASON_WINDOW:])
+    if len(skip_log) >= 5:
+        skipped_rounds = [e for e in skip_log if not e["would_play"]]
+        hits_missed    = sum(1 for e in skipped_rounds if e.get("hit_if_played", False))
+        if hits_missed >= SKIP_FORCE_PLAY_MISS and not entropy_ok:
+            entropy_ok = True
+            reasoning_notes.append(f"missed {hits_missed} hits while skipping — forcing play")
+
+    # Final decision
+    should_play = entropy_ok and conf_ok
+
+    if not should_play:
+        if brake_active:
+            skip_reason = "Loss brake active"
+        elif not entropy_ok:
+            skip_reason = f"High entropy ({ent:.4f} ≥ {eth:.3f})"
+            if regime_mode == "hostile":
+                skip_reason += " [hostile regime: strict]"
+        elif not conf_ok:
+            skip_reason = f"Low confidence ({t1s:.4f} ≤ {_get_top1_threshold():.4f})"
+            if regime_mode != "normal":
+                skip_reason += f" [{regime_mode} regime]"
+
+    if reasoning_notes:
+        print(f"[SmartSkip] play={should_play} notes={reasoning_notes}")
+
+    return should_play, skip_reason, reasoning_notes
+
+
+def record_skip_outcome(would_play, actual_round_class, top2_preds):
+    """Record what happened to a round (played or skipped) for skip learning."""
+    hit_if_played = actual_round_class in top2_preds
+    with _lock:
+        _skip_reason_log.append({
+            "would_play":     would_play,
+            "actual":         actual_round_class,
+            "top2":           list(top2_preds),
+            "hit_if_played":  hit_if_played,
+        })
+        if len(_skip_reason_log) > SKIP_REASON_WINDOW * 5:
+            _skip_reason_log.pop(0)
+
 
 # ── SCORE ROUND ───────────────────────────────────────────────────────────────
 def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar,
@@ -761,8 +1110,6 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar,
     def rel(t,key): return min(1.0,sum(t[key].values())/30) if key in t else 0
     r2=rel(t2,k2);r3=rel(t3,k3);r4=rel(t4,k4)
     rec=h[-100:] if n>=100 else h
-    # FIX: Shrunk recent window from 20 → 8 so recent local behaviour
-    #      dominates the wv score component much more strongly.
     rs=h[-7:] if n>=7 else h
     rc=Counter(rec);rsc=Counter(rs)
     lp={}
@@ -813,7 +1160,6 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar,
     ts=sum(sc.values()) or 1
     sc={k:v/ts for k,v in sc.items()}
 
-    # Use snapshot or live values for pattern
     pattern_scores = compute_pattern_scores_with_params(h, lookback, decay)
     sc, pattern_info = apply_pattern_boost_with_params(sc, pattern_scores, dyn_thresh, boost_max, boost_min)
 
@@ -824,9 +1170,6 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar,
             _last_pattern_info["raw_scores"] = {g: round(v, 4) for g, v in pattern_scores.items()}
 
     # ── STREAK DETECTOR ───────────────────────────────────────────────────────
-    # FIX: Detect when a single class has been dominating the last STREAK_WINDOW
-    #      rounds and directly boost its score so the model reacts to local
-    #      regime shifts faster than global history weights allow.
     if len(h) >= STREAK_WINDOW:
         last_sw = h[-STREAK_WINDOW:]
         for cls in range(1, 9):
@@ -835,8 +1178,7 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar,
                 boost = STREAK_BOOST_PER * (cnt - STREAK_MIN + 1)
                 sc[cls] = sc.get(cls, 0.0) * (1.0 + boost)
                 print(f"[StreakBoost] Class {cls} ({CLASS_NAMES.get(cls,'?')}) "
-                      f"appeared {cnt}x in last {STREAK_WINDOW} rounds → "
-                      f"boost={boost:.2f}")
+                      f"appeared {cnt}x in last {STREAK_WINDOW} rounds → boost={boost:.2f}")
         ts = sum(sc.values()) or 1.0
         sc = {k: v / ts for k, v in sc.items()}
 
@@ -866,8 +1208,6 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar,
         recent_actuals = [e["actual"] for e in ph[-NOISE_WINDOW:] if "actual" in e]
         if len(recent_actuals) >= NOISE_WINDOW:
             unique_count = len(set(recent_actuals))
-            # FIX: NOISE_UNIQUE_THRESH raised to 7 (was 5) and
-            #      NOISE_SCORE_FLATTEN reduced to 0.20 (was 0.30)
             if unique_count >= NOISE_UNIQUE_THRESH:
                 uniform = 1.0 / 8.0
                 for cls in sc:
@@ -886,6 +1226,27 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar,
         ts = sum(sc.values()) or 1.0
         sc = {k: v / ts for k, v in sc.items()}
 
+    # ── NEW: PATTERN MEMORY ADJUSTMENT ───────────────────────────────────────
+    # Only apply outside simulation (param_snapshot is None = live mode)
+    if param_snapshot is None:
+        sc, mem_info = pattern_memory_adjust(h, sc)
+        with _lock:
+            _reasoning_last["pattern_memory"] = mem_info
+    # ── END PATTERN MEMORY ────────────────────────────────────────────────────
+
+    # ── NEW: ANTI-PATTERN ADJUSTMENT ─────────────────────────────────────────
+    if param_snapshot is None:
+        with _lock:
+            anti_st = dict(_anti_pattern_state)
+            reg_st  = dict(_regime_state)
+        if anti_st.get("active") and anti_st.get("forced_classes"):
+            sc = apply_anti_pattern_to_scores(
+                sc, anti_st["forced_classes"], reg_st.get("mode", "normal"))
+        # renorm after anti-pattern
+        ts = sum(sc.values()) or 1.0
+        sc = {k: v / ts for k, v in sc.items()}
+    # ── END ANTI-PATTERN ──────────────────────────────────────────────────────
+
     rk=sorted(sc.items(),key=lambda x:-x[1])
     ent=-sum(v*math.log2(v) for v in sc.values() if v>0)
     t3s = rk[2][1] if len(rk) >= 3 else 0.0
@@ -893,7 +1254,6 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar,
     return [rk[0][0],rk[1][0]],sc,ent,rk[0][1],rk[1][1],t3s,t3c,markov_preds
 
 
-# FIX #5: Param-explicit versions of pattern helpers used by score_round
 def compute_pattern_scores_with_params(rewards, lookback, decay):
     if len(rewards) < lookback:
         return {g: 0.0 for g in PATTERN_GROUPS}
@@ -941,52 +1301,36 @@ def apply_pattern_boost_with_params(scores_dict, pattern_scores, dyn_thresholds,
 
 
 def should_play(t1, ent, brake_active=False):
+    """Legacy wrapper — real logic now goes through smart_skip_decision in _build_cached_pred."""
     if brake_active:
         return False
     top1_t = _get_top1_threshold()
     if t1 <= top1_t:
         return False
-
     penalty = _compute_entropy_penalty()
     effective_ent = ent - penalty
-
     cluster_reduction, high_mult_count = _compute_cluster_reduction()
     if cluster_reduction > 0:
         effective_ent -= cluster_reduction
-        print(f"[ClusterBonus] {high_mult_count} high-mult in last {CLUSTER_WINDOW} → "
-              f"entropy reduced by {cluster_reduction:.2f} "
-              f"({ent:.4f}→{effective_ent:.4f})")
-
     eth = _get_entropy_threshold()
-    if penalty > 0:
-        print(f"[EntropyPenalty] streak={_get_consec_entropy_skips()} "
-              f"penalty={penalty:.3f} ent={ent:.4f}→{effective_ent:.4f}")
     return effective_ent < eth
 
 # ── BONUS PICK LOGIC ──────────────────────────────────────────────────────────
-# ── HIGH-MULT CASCADE CONFIG ──────────────────────────────────────────────────
-# If a high-mult class appeared last round, boost the lower high-mult classes
-# in bonus scoring only. Does NOT touch main sc[] scores.
 HIGH_MULT_CASCADE = {
-    7: {2, 3},      # 50x came → boost 25x and 10x
-    3: {2, 7},      # 25x came → boost 15x and 10x
-    4: {2, 4},      # 15x came → boost 10x
-    2: {2},       # 10x came → no cascade (nothing lower)
+    7: {2, 3},
+    3: {2, 7},
+    4: {2, 4},
+    2: {2},
 }
-CASCADE_EV_BOOST = 0.75   # how much to boost EV score for cascade classes
+CASCADE_EV_BOOST = 0.75
 
 def get_bonus_picks(scores, top2):
     with _lock:
         thresh = _dynamic_bonus_thresh
 
     sc_map = {int(k): float(v) for k, v in scores.items()}
-
     suppressed = _get_suppressed_bonus_classes()
-    if suppressed:
-        print(f"[BonusSuppress] Currently suppressed classes: "
-              f"{[CLASS_NAMES.get(c, str(c)) for c in suppressed]}")
 
-    # ── Cascade: check if last round was a high-mult ──────────────────────────
     with _lock:
         last_two = list(_rewards[-2:]) if len(_rewards) >= 2 else list(_rewards[-1:]) if _rewards else []
     cascade_classes = set()
@@ -995,8 +1339,7 @@ def get_bonus_picks(scores, top2):
             extra = HIGH_MULT_CASCADE[last_reward]
             if extra:
                 print(f"[Cascade] Round had {CLASS_NAMES.get(last_reward,'?')} "
-                      f"→ cascade boost for: "
-                      f"{[CLASS_NAMES.get(c,'?') for c in extra]}")
+                      f"→ cascade boost for: {[CLASS_NAMES.get(c,'?') for c in extra]}")
             cascade_classes |= extra
 
     qualifying = set()
@@ -1005,11 +1348,8 @@ def get_bonus_picks(scores, top2):
             continue
         prob = sc_map.get(cls, 0.0)
         mult = HIGH_MULT_EV.get(cls, 1)
-        ev_base = prob * mult
-
-        # Apply cascade EV boost for qualifying cascade classes (bonus-only)
+        ev_base   = prob * mult
         ev_boosted = ev_base + CASCADE_EV_BOOST if cls in cascade_classes else ev_base
-
         ev_pass   = ev_boosted >= HIGH_MULT_EV_TARGET
         conf_pass = prob > thresh
         if ev_pass or conf_pass:
@@ -1121,6 +1461,8 @@ def _run_sim(rewards):
 
 # ── BUILD CACHED PRED ─────────────────────────────────────────────────────────
 def _build_cached_pred(rewards, raw_rounds, brake):
+    global _reasoning_last
+
     with _lock:
         train_rounds  = _dynamic_train_rounds
         cur_top1_t    = _top1_threshold
@@ -1133,6 +1475,7 @@ def _build_cached_pred(rewards, raw_rounds, brake):
         dw            = dict(_dynamic_markov_w)
         eth           = _entropy_threshold
         ces           = _consec_entropy_skips
+        ph_snap       = list(_play_history)
 
     if len(rewards) < train_rounds + 5:
         return None
@@ -1140,8 +1483,7 @@ def _build_cached_pred(rewards, raw_rounds, brake):
     top2, scores, ent, t1s, t2s, t3s, t3c, _ = score_round(rewards, *stats)
 
     # ── Enforce at least 2 lower-multiplier picks in display ─────────────────
-    # High-mult classes (2,3,4,7) go to bonus section; main picks stay low-mult.
-    _t1s_for_play = t1s   # preserve original top-1 score for play/skip logic
+    _t1s_for_play = t1s
     _LOW_MULT     = {1, 5, 6, 8}
     if any(c not in _LOW_MULT for c in top2):
         _rk  = sorted(scores.items(), key=lambda x: -x[1])
@@ -1164,24 +1506,37 @@ def _build_cached_pred(rewards, raw_rounds, brake):
     if cluster_reduction > 0:
         effective_ent -= cluster_reduction
         print(f"[ClusterBonus] {high_mult_count} high-mult in last {CLUSTER_WINDOW} → "
-              f"entropy reduced by {cluster_reduction:.2f} "
-              f"({ent:.4f}→{effective_ent:.4f})")
+              f"entropy reduced by {cluster_reduction:.2f} ({ent:.4f}→{effective_ent:.4f})")
 
     penalty_forced = (penalty > 0 and ent >= eth and effective_ent < eth)
-    play = _t1s_for_play > cur_top1_t and effective_ent < eth and brake == 0
 
-    skip_reason = None
-    if brake > 0:
-        skip_reason = f"Loss brake ({brake} rounds left)"
-    elif effective_ent >= eth:
-        if penalty_forced:
-            pass
-        else:
+    # ── NEW: Update Regime + Anti-pattern before skip decision ───────────────
+    regime_mode, regime_reason = update_regime(rewards, ph_snap, ent)
+    anti_active, forced_classes = update_anti_pattern(ph_snap)
+
+    # ── NEW: Smart skip decision ──────────────────────────────────────────────
+    play, skip_reason, skip_notes = smart_skip_decision(
+        base_play_signal=(t1s > cur_top1_t and effective_ent < eth),
+        ent=ent,
+        t1s=_t1s_for_play,
+        brake_active=(brake > 0),
+        regime_mode=regime_mode,
+        anti_active=anti_active,
+        forced_classes=forced_classes,
+        effective_ent=effective_ent,
+        eth=eth,
+    )
+
+    # Backwards-compat: also compute original skip_reason labels
+    if not play and skip_reason is None:
+        if brake > 0:
+            skip_reason = f"Loss brake ({brake} rounds left)"
+        elif effective_ent >= eth:
             skip_reason = f"High entropy ({ent:.4f} ≥ {eth:.3f})"
             if cluster_reduction > 0:
                 skip_reason += f" [cluster-{high_mult_count} reduced by {cluster_reduction:.2f}]"
-    elif _t1s_for_play <= cur_top1_t:
-        skip_reason = f"Low confidence ({_t1s_for_play:.4f} ≤ {cur_top1_t:.4f})"
+        elif _t1s_for_play <= cur_top1_t:
+            skip_reason = f"Low confidence ({_t1s_for_play:.4f} ≤ {cur_top1_t:.4f})"
 
     last_round = raw_rounds[-1]["round"] if raw_rounds else None
     next_round = (last_round + 1) if last_round else None
@@ -1193,21 +1548,38 @@ def _build_cached_pred(rewards, raw_rounds, brake):
     normal_top3_condition = (play and top2_are_small and t3c is not None
                              and (t2s - t3s) <= 0.01)
 
-    # Force top3 if recent play history has 2+ consecutive misses
     with _lock:
-        ph_snap = list(_play_history)
+        ph_inner = list(_play_history)
     recent_misses = (
-        len(ph_snap) >= 2
-        and not ph_snap[-1]["hit"]
-        and not ph_snap[-2]["hit"]
+        len(ph_inner) >= 2
+        and not ph_inner[-1]["hit"]
+        and not ph_inner[-2]["hit"]
     )
     if recent_misses:
         print(f"[Top3Force] 2+ consecutive misses detected → forcing pred3")
 
-    if play and (normal_top3_condition or penalty_forced or recent_misses):
+    # Also force pred3 when anti-pattern is active or regime is hostile
+    force_pred3_regime = play and (anti_active or regime_mode in ("weird", "hostile"))
+    if force_pred3_regime:
+        print(f"[Top3Force] regime={regime_mode} anti={anti_active} → forcing pred3")
+
+    if play and (normal_top3_condition or penalty_forced or recent_misses or force_pred3_regime):
         if t3c is not None:
             pred3      = t3c
             pred3_conf = round(t3s * 100, 2)
+
+    # ── If anti-pattern is active, consider replacing pred3 with forced class ─
+    if play and anti_active and forced_classes:
+        forced_not_in_top2 = [c for c in forced_classes if c not in top2]
+        if forced_not_in_top2:
+            candidate = forced_not_in_top2[0]
+            # Only override if candidate is a small-mult (bonus handles high-mult)
+            if candidate in SMALL_MULT:
+                if pred3 is None or scores.get(candidate, 0) > scores.get(pred3, 0):
+                    pred3      = candidate
+                    pred3_conf = round(scores.get(candidate, 0) * 100, 2)
+                    print(f"[AntiPattern] pred3 overridden to "
+                          f"{CLASS_NAMES.get(candidate,'?')} (forced class)")
 
     bonus_picks = get_bonus_picks(scores, top2)
 
@@ -1232,6 +1604,10 @@ def _build_cached_pred(rewards, raw_rounds, brake):
     with _lock:
         pattern_snap    = dict(_last_pattern_info)
         dyn_thresh_snap = dict(_dynamic_threshold)
+        regime_snap     = dict(_regime_state)
+        anti_snap       = dict(_anti_pattern_state)
+        reasoning_snap  = dict(_reasoning_last)
+
     pattern_summary = {}
     for g, info in pattern_snap.items():
         if g in ("raw_scores", "_any_triggered"):
@@ -1249,6 +1625,30 @@ def _build_cached_pred(rewards, raw_rounds, brake):
     top3 = [top2[0], top2[1]]
     if pred3 is not None:
         top3.append(pred3)
+
+    # Build reasoning summary for API
+    reasoning_summary = {
+        "regime": {
+            "mode":          regime_snap.get("mode", "normal"),
+            "reason":        regime_snap.get("reason", ""),
+            "hitrate_short": regime_snap.get("hitrate_short"),
+            "hitrate_long":  regime_snap.get("hitrate_long"),
+            "dist_shift":    regime_snap.get("dist_shift", False),
+        },
+        "anti_pattern": {
+            "active":         anti_snap.get("active", False),
+            "consec_misses":  anti_snap.get("consec_misses", 0),
+            "ulta_detected":  anti_snap.get("ulta_detected", False),
+            "forced_classes": [CLASS_NAMES.get(c, str(c))
+                               for c in anti_snap.get("forced_classes", [])],
+        },
+        "pattern_memory":  reasoning_snap.get("pattern_memory", {"active": False}),
+        "skip_override_notes": skip_notes,
+    }
+
+    with _lock:
+        _reasoning_last.clear()
+        _reasoning_last.update(reasoning_summary)
 
     return {
         "next_round":         next_round,   "latest_round":  last_round,
@@ -1290,6 +1690,7 @@ def _build_cached_pred(rewards, raw_rounds, brake):
         "bonus_conf_thresh":  round(bonus_thresh, 4),
         "markov_weights":     {k: round(v, 4) for k, v in dw.items()},
         "suppressed_bonus_classes": suppressed_classes,
+        "reasoning":          reasoning_summary,    # ← NEW field
         "_play":              play,
         "_top2":              list(top2),
         "_top3":              top3,
@@ -1335,7 +1736,6 @@ def fetcher_loop():
                     _rewards.clear();    _rewards.extend(rewards)
                     pending = _pending_pred
 
-                # ── Resolve PLAY pending prediction ──────────────────────────
                 if pending is not None:
                     pred_round = pending["round"]
                     actual_rec = next((r for r in records if r["round"] == pred_round), None)
@@ -1354,6 +1754,9 @@ def fetcher_loop():
                                 update_pattern_miss(group_name, pscore)
 
                         _record_bonus_class_result(pending.get("bonus_picks"), actual_val)
+
+                        # ── Record for skip learning ──────────────────────────
+                        record_skip_outcome(True, actual_val, pending["top2"])
 
                         with _lock:
                             _brake_play_results.append(hit)
@@ -1436,8 +1839,7 @@ def fetcher_loop():
                 new_tr = compute_dynamic_train_rounds(total_rounds)
                 cur_tr = _get_train_rounds()
                 if new_tr != cur_tr:
-                    print(f"[TrainRounds] {cur_tr}→{new_tr} "
-                          f"(total_rounds={total_rounds})")
+                    print(f"[TrainRounds] {cur_tr}→{new_tr} (total_rounds={total_rounds})")
                     _set_train_rounds(new_tr)
 
                 cur = _get_entropy_threshold()
@@ -1503,9 +1905,7 @@ def fetcher_loop():
                                                extra * ENTROPY_SKIP_PENALTY)
                             eth_now = _get_entropy_threshold()
                             print(f"[EntropySkip] streak={new_ces} "
-                                  f"next_penalty={next_penalty:.3f} "
-                                  f"(effective threshold will be "
-                                  f"{eth_now - next_penalty:.4f})")
+                                  f"next_penalty={next_penalty:.3f}")
 
                 with _lock:
                     _cached_pred = cached
@@ -1533,12 +1933,8 @@ def fetcher_loop():
                                 _pending_pred = np_
                             print(f"[Fetcher] Pending → #{nr} top2={cached['_top2']} "
                                   f"top3={cached['_top3']} "
-                                  f"penalty_forced={cached.get('_penalty_forced',False)} "
-                                  f"trigger={cached['brake_trigger']} "
-                                  f"pause={cached['brake_pause']} "
-                                  f"top1_t={cached['top1_threshold']} "
-                                  f"lookback={cached['pattern_lookback']} "
-                                  f"decay={cached['pattern_decay']}")
+                                  f"regime={cached['reasoning']['regime']['mode']} "
+                                  f"anti={cached['reasoning']['anti_pattern']['active']}")
 
                 with _lock:
                     lr = _raw_rounds[-1]["round"] if _raw_rounds else "?"
@@ -1607,6 +2003,9 @@ def api_stats():
         bcr_snap  = {cls: list(v) for cls, v in _bonus_class_results.items()}
         ces       = _consec_entropy_skips
         eth       = _entropy_threshold
+        regime_s  = dict(_regime_state)
+        anti_s    = dict(_anti_pattern_state)
+        skip_log  = list(_skip_reason_log[-20:])
     cur = 0; mx_live = 0
     for e in reversed(live):
         if not e["hit"]: cur += 1; mx_live = max(mx_live, cur)
@@ -1657,6 +2056,24 @@ def api_stats():
         }
         for cls in HIGH_MULT_CLASSES
     }
+    # ── NEW: Reasoning engine stats ───────────────────────────────────────────
+    stats["reasoning"] = {
+        "regime": {
+            "mode":          regime_s.get("mode", "normal"),
+            "reason":        regime_s.get("reason", ""),
+            "hitrate_short": regime_s.get("hitrate_short"),
+            "hitrate_long":  regime_s.get("hitrate_long"),
+            "dist_shift":    regime_s.get("dist_shift", False),
+        },
+        "anti_pattern": {
+            "active":         anti_s.get("active", False),
+            "consec_misses":  anti_s.get("consec_misses", 0),
+            "ulta_detected":  anti_s.get("ulta_detected", False),
+            "forced_classes": [CLASS_NAMES.get(c, str(c))
+                               for c in anti_s.get("forced_classes", [])],
+        },
+        "skip_log_last_20": skip_log,
+    }
     return jsonify(stats)
 
 @app.route("/api/status")
@@ -1671,6 +2088,8 @@ def api_status():
         dyn_tr = _dynamic_train_rounds
         ces    = _consec_entropy_skips
         eth    = _entropy_threshold
+        regime_s = dict(_regime_state)
+        anti_s   = dict(_anti_pattern_state)
     now_ist = datetime.now(IST)
     fs["total_rounds"]        = total
     fs["latest_round"]        = latest
@@ -1685,6 +2104,8 @@ def api_status():
     cluster_red, hmc = _compute_cluster_reduction()
     fs["cluster_reduction"]   = round(cluster_red, 4)
     fs["cluster_count"]       = hmc
+    fs["regime_mode"]         = regime_s.get("mode", "normal")
+    fs["anti_pattern_active"] = anti_s.get("active", False)
     reset_today = now_ist.replace(hour=RESET_HOUR_IST, minute=RESET_MINUTE_IST,
                                   second=0, microsecond=0)
     from datetime import timedelta
@@ -1712,7 +2133,6 @@ def api_mode():
     coolend_s = COOLDOWN_END_HOUR * 3600 + COOLDOWN_END_MINUTE * 60
     live_s    = LIVE_START_HOUR   * 3600 + LIVE_START_MINUTE   * 60
     reset_s   = RESET_HOUR_IST    * 3600 + RESET_MINUTE_IST    * 60
-
     if mode == "cooldown":
         secs_left    = coolend_s - total_s
         target_label = f"{COOLDOWN_END_HOUR:02d}:{COOLDOWN_END_MINUTE:02d} IST"
@@ -1727,10 +2147,8 @@ def api_mode():
         else:
             secs_left = (86400 - total_s) + reset_s
         target_label = f"{RESET_HOUR_IST:02d}:{RESET_MINUTE_IST:02d} IST"
-
     h12_live = LIVE_START_HOUR if LIVE_START_HOUR <= 12 else LIVE_START_HOUR - 12
     ampm_live = "AM" if LIVE_START_HOUR < 12 else "PM"
-
     return jsonify({
         "mode":            mode,
         "secs_left":       max(0, int(secs_left)),
@@ -1817,6 +2235,8 @@ def api_adaptive():
         dyn_bn = _dynamic_bonus_thresh
         dyn_mw = dict(_dynamic_markov_w)
         ces    = _consec_entropy_skips
+        regime_s = dict(_regime_state)
+        anti_s   = dict(_anti_pattern_state)
     suppressed = list(_get_suppressed_bonus_classes())
     cluster_red, hmc = _compute_cluster_reduction()
     return jsonify({
@@ -1875,6 +2295,98 @@ def api_adaptive():
             "unique_thresh":  NOISE_UNIQUE_THRESH,
             "score_flatten":  NOISE_SCORE_FLATTEN,
             "window":         NOISE_WINDOW,
+        },
+        # ── NEW ──────────────────────────────────────────────────────────────
+        "reasoning_engine": {
+            "pattern_memory": {
+                "fp_len":       PMEM_FP_LEN,
+                "match_len":    PMEM_MATCH_LEN,
+                "max_matches":  PMEM_MAX_MATCHES,
+                "boost_weight": PMEM_BOOST_WEIGHT,
+                "min_matches":  PMEM_MIN_MATCHES,
+            },
+            "regime_detector": {
+                "mode":         regime_s.get("mode", "normal"),
+                "reason":       regime_s.get("reason", ""),
+                "hitrate_short": regime_s.get("hitrate_short"),
+                "hitrate_long":  regime_s.get("hitrate_long"),
+                "dist_shift":   regime_s.get("dist_shift", False),
+                "config": {
+                    "short_window":   REGIME_WINDOW_SHORT,
+                    "long_window":    REGIME_WINDOW_LONG,
+                    "weird_thresh":   REGIME_WEIRD_THRESH,
+                    "entropy_spike":  REGIME_ENTROPY_SPIKE,
+                    "dist_thresh":    REGIME_DIST_THRESH,
+                },
+            },
+            "anti_pattern": {
+                "active":         anti_s.get("active", False),
+                "consec_misses":  anti_s.get("consec_misses", 0),
+                "ulta_detected":  anti_s.get("ulta_detected", False),
+                "forced_classes": [CLASS_NAMES.get(c, str(c))
+                                   for c in anti_s.get("forced_classes", [])],
+                "config": {
+                    "consec_miss_trigger": ANTI_CONSEC_MISS,
+                    "miss_window":         ANTI_MISS_WINDOW,
+                    "ulta_window":         ANTI_ULTA_WINDOW,
+                    "ulta_thresh":         ANTI_ULTA_THRESH,
+                },
+            },
+            "smart_skip": {
+                "skip_regime_override": SKIP_REGIME_OVERRIDE,
+                "skip_anti_override":   SKIP_ANTI_OVERRIDE,
+                "force_play_miss_n":    SKIP_FORCE_PLAY_MISS,
+                "reason_window":        SKIP_REASON_WINDOW,
+            },
+        },
+    })
+
+# ── NEW: Dedicated reasoning API endpoint ─────────────────────────────────────
+@app.route("/api/reasoning")
+def api_reasoning():
+    with _lock:
+        regime_s  = dict(_regime_state)
+        anti_s    = dict(_anti_pattern_state)
+        skip_log  = list(_skip_reason_log[-30:])
+        reasoning = dict(_reasoning_last)
+        ph        = list(_play_history)
+
+    # Compute skip opportunity stats
+    skipped_rounds    = [e for e in skip_log if not e["would_play"]]
+    hits_missed_skip  = sum(1 for e in skipped_rounds if e.get("hit_if_played", False))
+    played_rounds     = [e for e in skip_log if e["would_play"]]
+    hit_rate_played   = (sum(1 for e in played_rounds if e.get("hit_if_played", True))
+                         / len(played_rounds) if played_rounds else None)
+
+    return jsonify({
+        "regime": {
+            "mode":          regime_s.get("mode", "normal"),
+            "reason":        regime_s.get("reason", ""),
+            "hitrate_short": regime_s.get("hitrate_short"),
+            "hitrate_long":  regime_s.get("hitrate_long"),
+            "dist_shift":    regime_s.get("dist_shift", False),
+            "entropy_history_len": len(regime_s.get("entropy_history", [])),
+        },
+        "anti_pattern": {
+            "active":         anti_s.get("active", False),
+            "consec_misses":  anti_s.get("consec_misses", 0),
+            "ulta_detected":  anti_s.get("ulta_detected", False),
+            "forced_classes": [CLASS_NAMES.get(c, str(c))
+                               for c in anti_s.get("forced_classes", [])],
+        },
+        "pattern_memory": reasoning.get("pattern_memory", {"active": False}),
+        "skip_analysis": {
+            "total_in_log":       len(skip_log),
+            "skipped_count":      len(skipped_rounds),
+            "played_count":       len(played_rounds),
+            "hits_missed_by_skipping": hits_missed_skip,
+            "recent_log":         skip_log[-10:],
+        },
+        "play_history_summary": {
+            "total":    len(ph),
+            "recent5":  ph[-5:] if ph else [],
+            "hitrate5": (sum(e["hit"] for e in ph[-5:]) / 5
+                         if len(ph) >= 5 else None),
         },
     })
 
@@ -1957,12 +2469,13 @@ def startup():
                 "penalty_forced":  cached.get("_penalty_forced", False),
             }
             print(f"[Startup] Pending → #{_pending_pred['round']} "
-                  f"top2={_pending_pred['top2']} "
-                  f"top3={_pending_pred['top3']} "
+                  f"top2={_pending_pred['top2']} top3={_pending_pred['top3']} "
                   f"penalty_forced={_pending_pred['penalty_forced']}")
         action = cached.get("action","N/A") if cached else "N/A"
+        regime = (cached.get("reasoning", {}).get("regime", {}).get("mode", "normal")
+                  if cached else "normal")
         print(f"[Startup] Done — acc={sim_dict.get('accuracy')}% "
-              f"brake={brake} action={action} "
+              f"brake={brake} action={action} regime={regime} "
               f"top1_t={round(_get_top1_threshold(),4)} "
               f"lookback={_dynamic_lookback} decay={round(_dynamic_decay,3)}")
     else:
