@@ -9,7 +9,7 @@ app = Flask(__name__)
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 DATA_FILE              = "round_data.json"
 SKIP_TOP1_THRESHOLD    = 0.180
-SKIP_ENTROPY_THRESHOLD = 2.70       # raised: 2.70 → 2.85
+SKIP_ENTROPY_THRESHOLD = 2.70
 BRAKE_TRIGGER          = 2
 BRAKE_PAUSE            = 2
 POLL_INTERVAL          = 5
@@ -18,17 +18,17 @@ HIGH_MULT_CLASSES      = {2, 3, 4, 7}
 
 # EV multipliers for bonus inclusion
 HIGH_MULT_EV        = {2: 10, 3: 19, 4: 13, 7: 30}
-HIGH_MULT_EV_TARGET = 0.8   # lowered: high-mult classes are rare, 0.8 still EV-positive
+HIGH_MULT_EV_TARGET = 1.5   # lowered: high-mult classes are rare, 0.8 still EV-positive
 
 # Minimum score floor for high-mult classes — prevents rarity from suppressing them to zero
 # Based on approximate real frequencies: 2≈8%, 4≈6%, 3≈4%, 7≈2%
 HIGH_MULT_EV_FLOOR = {2: 0.055, 3: 0.030, 4: 0.045, 7: 0.018}
 
-# Entropy adaptation targets — raised to reduce over-skipping
-TARGET_PLAY_MIN  = 0.50     # was 0.38
-TARGET_PLAY_MAX  = 0.55     # was 0.45
+# Entropy adaptation targets
+TARGET_PLAY_MIN  = 0.50
+TARGET_PLAY_MAX  = 0.55
 ENT_THRESH_MIN   = 2.70
-ENT_THRESH_MAX   = 3.05     # was 2.90
+ENT_THRESH_MAX   = 3.05
 
 TOP1_THRESH_MIN  = 0.150
 TOP1_THRESH_MAX  = 0.260
@@ -50,7 +50,7 @@ FETCH_HEADERS = {
 
 # ── PATTERN DETECTION CONFIG ──────────────────────────────────────────────────
 PATTERN_BASE_WEIGHTS = {
-    7: 1.5, 3: 2.5, 4: 2, 2: 3,
+    7: 1.5, 3: 2.5, 4: 2, 2: 3,   # boosted: high-mult classes need stronger pattern signal
     1: 1.0, 5: 1.0, 6: 1.0, 8: 1.0,
 }
 
@@ -62,7 +62,7 @@ PATTERN_GROUPS = {
     "cls8":      {"classes": {8},           "default_threshold": 4.0},
 }
 
-PATTERN_LOOKBACK_DEFAULT = 7
+PATTERN_LOOKBACK_DEFAULT = 7   # fixed at 7
 PATTERN_LOOKBACK_MIN     = 6
 PATTERN_LOOKBACK_MAX     = 10
 
@@ -121,9 +121,17 @@ BONUS_CLASS_MISS_WINDOW   = 4
 BONUS_CLASS_SUPPRESS_MULT = 0.0
 
 # ── ENTROPY SKIP PENALTY CONFIG ───────────────────────────────────────────────
-ENTROPY_SKIP_GRACE      = 3     # free consecutive entropy-skips before penalty kicks in
-ENTROPY_SKIP_PENALTY    = 0.04  # entropy reduction per extra skip beyond grace
-ENTROPY_SKIP_MAX_FORCE  = 0.40  # cap total penalty
+ENTROPY_SKIP_GRACE      = 3
+ENTROPY_SKIP_PENALTY    = 0.04
+ENTROPY_SKIP_MAX_FORCE  = 0.40
+
+# ── HIGH-MULT CLUSTER BONUS CONFIG ───────────────────────────────────────────
+# When high-mult classes appear frequently in recent rounds, entropy rises for
+# the RIGHT reason — reduce effective entropy to allow playing
+CLUSTER_WINDOW          = 7     # look at last 7 actual outcomes
+CLUSTER_MIN_COUNT       = 2     # need at least 2 high-mult in window to trigger
+CLUSTER_REDUCTION_STEP  = 0.07  # per high-mult class found
+CLUSTER_REDUCTION_MAX   = 0.30  # cap total reduction
 
 # ── GLOBAL STATE ──────────────────────────────────────────────────────────────
 _lock              = threading.Lock()
@@ -147,8 +155,6 @@ _fetch_status = {
 }
 
 # ── ENTROPY SKIP STREAK STATE ─────────────────────────────────────────────────
-# Counts rounds skipped *specifically* due to high entropy (not brake/low-conf).
-# Resets to 0 the moment a round is played.
 _consec_entropy_skips = 0
 
 # ── PATTERN STATE ─────────────────────────────────────────────────────────────
@@ -198,10 +204,10 @@ PLAY_HISTORY_MAX = 20
 
 # ── RECENT MISS SUPPRESSION CONFIG ───────────────────────────────────────────
 MISS_SUPPRESS_WINDOW    = 3
-MISS_SUPPRESS_PENALTY   = 0.15
+MISS_SUPPRESS_PENALTY   = 0.25  # reduced from 0.25
 NOISE_WINDOW            = 7
 NOISE_UNIQUE_THRESH     = 5
-NOISE_SCORE_FLATTEN     = 0.25
+NOISE_SCORE_FLATTEN     = 0.15  # reduced from 0.35
 
 
 # ── DAILY RESET ───────────────────────────────────────────────────────────────
@@ -368,7 +374,7 @@ def recalibrate_markov_weights(hit_bufs):
 # ── DYNAMIC PATTERN PARAMS ────────────────────────────────────────────────────
 def recalibrate_pattern_params(total_rounds, sim_hit_rate):
     global _dynamic_lookback, _dynamic_decay
-    new_lookback = 7
+    new_lookback = 7  # fixed at 7
     if sim_hit_rate < 0.50:
         new_decay = max(PATTERN_DECAY_MIN, _dynamic_decay - 0.03)
     elif sim_hit_rate > 0.68:
@@ -588,6 +594,19 @@ def _compute_entropy_penalty():
         max(0, _consec_entropy_skips - ENTROPY_SKIP_GRACE) * ENTROPY_SKIP_PENALTY
     )
 
+def _compute_cluster_reduction():
+    """
+    Returns entropy reduction when high-mult classes cluster in recent rounds.
+    High-mult appearing frequently raises entropy for the RIGHT reason — signal to play.
+    """
+    with _lock:
+        recent_rewards = list(_rewards[-CLUSTER_WINDOW:]) if _rewards else []
+    high_mult_count = sum(1 for r in recent_rewards if r in HIGH_MULT_CLASSES)
+    if high_mult_count >= CLUSTER_MIN_COUNT:
+        reduction = min(CLUSTER_REDUCTION_MAX, high_mult_count * CLUSTER_REDUCTION_STEP)
+        return reduction, high_mult_count
+    return 0.0, high_mult_count
+
 def _is_penalty_forced(ent):
     """
     Returns True when the play decision is only passing because of the
@@ -683,7 +702,8 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar):
                 miss_classes.add(e["pred2"])
             for cls in miss_classes:
                 if cls in sc:
-                    penalty = MISS_SUPPRESS_PENALTY * 0.25 if cls in HIGH_MULT_CLASSES else MISS_SUPPRESS_PENALTY
+                    # High-mult classes get much smaller penalty — they naturally miss more
+                    penalty = MISS_SUPPRESS_PENALTY * 0.20 if cls in HIGH_MULT_CLASSES else MISS_SUPPRESS_PENALTY
                     sc[cls] *= (1.0 - penalty)
 
         if len(ph) >= 3:
@@ -726,12 +746,23 @@ def should_play(t1, ent, brake_active=False):
         return False
     with _lock:
         top1_t = _top1_threshold
-    # Low confidence never counts toward entropy-skip streak
     if t1 <= top1_t:
         return False
-    # Apply escalating entropy penalty for long entropy-skip streaks
+
     penalty = _compute_entropy_penalty()
     effective_ent = ent - penalty
+
+    # ── HIGH-MULT CLUSTER BONUS ───────────────────────────────────────────────
+    # When high-mult classes cluster in recent rounds, entropy rises for the
+    # RIGHT reason — reduce effective entropy to allow playing
+    cluster_reduction, high_mult_count = _compute_cluster_reduction()
+    if cluster_reduction > 0:
+        effective_ent -= cluster_reduction
+        print(f"[ClusterBonus] {high_mult_count} high-mult in last {CLUSTER_WINDOW} → "
+              f"entropy reduced by {cluster_reduction:.2f} "
+              f"({ent:.4f}→{effective_ent:.4f})")
+    # ─────────────────────────────────────────────────────────────────────────
+
     if penalty > 0:
         print(f"[EntropyPenalty] streak={_consec_entropy_skips} "
               f"penalty={penalty:.3f} ent={ent:.4f}→{effective_ent:.4f}")
@@ -870,19 +901,31 @@ def _build_cached_pred(rewards, raw_rounds, brake):
     # Compute penalty and effective entropy
     penalty       = _compute_entropy_penalty()
     effective_ent = ent - penalty
-    penalty_forced = (penalty > 0 and ent >= eth and effective_ent < eth)
 
+    # ── HIGH-MULT CLUSTER BONUS ───────────────────────────────────────────────
+    cluster_reduction, high_mult_count = _compute_cluster_reduction()
+    if cluster_reduction > 0:
+        effective_ent -= cluster_reduction
+        print(f"[ClusterBonus] {high_mult_count} high-mult in last {CLUSTER_WINDOW} → "
+              f"entropy reduced by {cluster_reduction:.2f} "
+              f"({ent:.4f}→{effective_ent:.4f})")
+    # ─────────────────────────────────────────────────────────────────────────
+
+    penalty_forced = (penalty > 0 and ent >= eth and effective_ent < eth)
     play = t1s > cur_top1_t and effective_ent < eth and brake == 0
 
     skip_reason = None
-    if brake > 0:              skip_reason = f"Loss brake ({brake} rounds left)"
-    elif ent >= eth:
+    if brake > 0:
+        skip_reason = f"Loss brake ({brake} rounds left)"
+    elif effective_ent >= eth:
         if penalty_forced:
-            # Penalty pushed it to play — no skip_reason
-            pass
+            pass  # penalty pushed it to play — no skip_reason
         else:
             skip_reason = f"High entropy ({ent:.4f} ≥ {eth:.3f})"
-    elif t1s <= cur_top1_t:    skip_reason = f"Low confidence ({t1s:.4f} ≤ {cur_top1_t:.4f})"
+            if cluster_reduction > 0:
+                skip_reason += f" [cluster-{high_mult_count} reduced by {cluster_reduction:.2f}]"
+    elif t1s <= cur_top1_t:
+        skip_reason = f"Low confidence ({t1s:.4f} ≤ {cur_top1_t:.4f})"
 
     last_round = raw_rounds[-1]["round"] if raw_rounds else None
     next_round = (last_round + 1) if last_round else None
@@ -890,9 +933,6 @@ def _build_cached_pred(rewards, raw_rounds, brake):
     pred3       = None
     pred3_conf  = None
 
-    # Include pred3 if:
-    # (a) normal top-3 condition (top2 are small-mult and scores are close), OR
-    # (b) this play was penalty-forced (model is less confident, widen the net)
     top2_are_small = all(c in SMALL_MULT for c in top2)
     normal_top3_condition = (play and top2_are_small and t3c is not None
                              and (t2s - t3s) <= 0.01)
@@ -938,7 +978,6 @@ def _build_cached_pred(rewards, raw_rounds, brake):
 
     suppressed_classes = list(_get_suppressed_bonus_classes())
 
-    # Build top3 list — always 3 items when penalty_forced (pred3 guaranteed above)
     top3 = [top2[0], top2[1]]
     if pred3 is not None:
         top3.append(pred3)
@@ -959,6 +998,8 @@ def _build_cached_pred(rewards, raw_rounds, brake):
         "entropy":            round(ent,4),
         "effective_entropy":  round(effective_ent, 4),
         "entropy_penalty":    round(penalty, 4),
+        "cluster_reduction":  round(cluster_reduction, 4),
+        "cluster_count":      high_mult_count,
         "penalty_forced":     penalty_forced,
         "consec_entropy_skips": _consec_entropy_skips,
         "action":             "PLAY" if play else "SKIP",
@@ -1199,14 +1240,12 @@ def fetcher_loop():
                 # ── Update consecutive entropy-skip counter ───────────────────
                 if cached is not None:
                     if cached["action"] == "PLAY":
-                        # Played (including penalty-forced plays) — reset streak
                         if _consec_entropy_skips > 0:
                             print(f"[EntropySkip] Streak reset after {_consec_entropy_skips} "
                                   f"consecutive entropy-skips "
                                   f"(penalty_forced={cached['penalty_forced']})")
                         _consec_entropy_skips = 0
                     elif (cached.get("skip_reason", "") or "").startswith("High entropy"):
-                        # Pure entropy skip — increment streak
                         _consec_entropy_skips += 1
                         extra = _consec_entropy_skips - ENTROPY_SKIP_GRACE
                         if extra > 0:
@@ -1216,7 +1255,6 @@ def fetcher_loop():
                                   f"next_penalty={next_penalty:.3f} "
                                   f"(effective threshold will be "
                                   f"{_entropy_threshold - next_penalty:.4f})")
-                    # Brake or low-confidence skip — don't touch the counter
                 # ─────────────────────────────────────────────────────────────
 
                 with _lock:
@@ -1359,7 +1397,9 @@ def api_stats():
     stats["pattern_decay"]       = round(dyn_dc, 4)
     stats["consec_entropy_skips"] = ces
     stats["entropy_skip_penalty"] = round(_compute_entropy_penalty(), 4)
-    # Miss suppression / noise state summary
+    cluster_red, hmc = _compute_cluster_reduction()
+    stats["cluster_reduction"]   = round(cluster_red, 4)
+    stats["cluster_count"]       = hmc
     recent3 = ph_snap[-3:] if ph_snap else []
     stats["play_history_len"]    = len(ph_snap)
     stats["recent_pred1_lock"]   = (len(set(e["pred1"] for e in recent3)) == 1 and len(recent3) == 3)
@@ -1367,7 +1407,6 @@ def api_stats():
     recent_actuals = [e["actual"] for e in ph_snap[-NOISE_WINDOW:] if "actual" in e]
     stats["noise_mode"]          = (len(recent_actuals) >= NOISE_WINDOW and
                                     len(set(recent_actuals)) >= NOISE_UNIQUE_THRESH)
-    # Per-class bonus miss state
     suppressed = list(_get_suppressed_bonus_classes())
     stats["suppressed_bonus_classes"] = suppressed
     stats["bonus_class_results"] = {
@@ -1404,6 +1443,9 @@ def api_status():
     fs["train_rounds"]        = dyn_tr
     fs["consec_entropy_skips"] = ces
     fs["entropy_skip_penalty"] = round(_compute_entropy_penalty(), 4)
+    cluster_red, hmc = _compute_cluster_reduction()
+    fs["cluster_reduction"]   = round(cluster_red, 4)
+    fs["cluster_count"]       = hmc
     reset_today = now_ist.replace(hour=RESET_HOUR_IST, minute=RESET_MINUTE_IST,
                                   second=0, microsecond=0)
     from datetime import timedelta
@@ -1485,45 +1527,55 @@ def api_adaptive():
     with _lock:
         suppressed = list(_get_suppressed_bonus_classes())
         ces        = _consec_entropy_skips
-        return jsonify({
-            "entropy_threshold":   {"value": round(_entropy_threshold, 4),
-                                    "min": ENT_THRESH_MIN, "max": ENT_THRESH_MAX},
-            "top1_threshold":      {"value": round(_top1_threshold, 4),
-                                    "min": TOP1_THRESH_MIN, "max": TOP1_THRESH_MAX},
-            "brake_trigger":       {"value": _dynamic_brake_trigger,
-                                    "min": BRAKE_TRIGGER_MIN, "max": BRAKE_TRIGGER_MAX},
-            "brake_pause":         {"value": _dynamic_brake_pause,
-                                    "min": BRAKE_PAUSE_MIN, "max": BRAKE_PAUSE_MAX},
-            "train_rounds":        {"value": _dynamic_train_rounds,
-                                    "min": TRAIN_ROUNDS_MIN, "max": TRAIN_ROUNDS_MAX},
-            "pattern_lookback":    {"value": _dynamic_lookback,
-                                    "min": PATTERN_LOOKBACK_MIN, "max": PATTERN_LOOKBACK_MAX},
-            "pattern_decay":       {"value": round(_dynamic_decay, 4),
-                                    "min": PATTERN_DECAY_MIN, "max": PATTERN_DECAY_MAX},
-            "pattern_boost_max":   {"value": round(_dynamic_boost_max, 4),
-                                    "min": PATTERN_BOOST_MIN_DEFAULT, "max": 0.50},
-            "bonus_conf_thresh":   {"value": round(_dynamic_bonus_thresh, 4),
-                                    "min": BONUS_CONF_THRESH_MIN, "max": BONUS_CONF_THRESH_MAX},
-            "markov_weights":      {k: round(v, 4) for k, v in _dynamic_markov_w.items()},
-            "markov_weight_range": {"min": MARKOV_WEIGHT_MIN, "max": MARKOV_WEIGHT_MAX},
-            "play_target":         {"min": TARGET_PLAY_MIN, "max": TARGET_PLAY_MAX},
-            "ev_thresholds":       {str(cls): {"multiplier": mult,
-                                               "min_prob": round(HIGH_MULT_EV_TARGET/mult, 4)}
-                                    for cls, mult in HIGH_MULT_EV.items()},
-            "bonus_class_suppress": {
-                "window":      BONUS_CLASS_MISS_WINDOW,
-                "suppressed":  suppressed,
-                "suppressed_names": [CLASS_NAMES.get(c, str(c)) for c in suppressed],
-            },
-            "entropy_skip_streak": {
-                "current":      ces,
-                "grace":        ENTROPY_SKIP_GRACE,
-                "penalty_step": ENTROPY_SKIP_PENALTY,
-                "max_force":    ENTROPY_SKIP_MAX_FORCE,
-                "current_penalty": round(_compute_entropy_penalty(), 4),
-                "effective_threshold": round(_entropy_threshold - _compute_entropy_penalty(), 4),
-            },
-        })
+    cluster_red, hmc = _compute_cluster_reduction()
+    return jsonify({
+        "entropy_threshold":   {"value": round(_entropy_threshold, 4),
+                                "min": ENT_THRESH_MIN, "max": ENT_THRESH_MAX},
+        "top1_threshold":      {"value": round(_top1_threshold, 4),
+                                "min": TOP1_THRESH_MIN, "max": TOP1_THRESH_MAX},
+        "brake_trigger":       {"value": _dynamic_brake_trigger,
+                                "min": BRAKE_TRIGGER_MIN, "max": BRAKE_TRIGGER_MAX},
+        "brake_pause":         {"value": _dynamic_brake_pause,
+                                "min": BRAKE_PAUSE_MIN, "max": BRAKE_PAUSE_MAX},
+        "train_rounds":        {"value": _dynamic_train_rounds,
+                                "min": TRAIN_ROUNDS_MIN, "max": TRAIN_ROUNDS_MAX},
+        "pattern_lookback":    {"value": _dynamic_lookback,
+                                "min": PATTERN_LOOKBACK_MIN, "max": PATTERN_LOOKBACK_MAX},
+        "pattern_decay":       {"value": round(_dynamic_decay, 4),
+                                "min": PATTERN_DECAY_MIN, "max": PATTERN_DECAY_MAX},
+        "pattern_boost_max":   {"value": round(_dynamic_boost_max, 4),
+                                "min": PATTERN_BOOST_MIN_DEFAULT, "max": 0.50},
+        "bonus_conf_thresh":   {"value": round(_dynamic_bonus_thresh, 4),
+                                "min": BONUS_CONF_THRESH_MIN, "max": BONUS_CONF_THRESH_MAX},
+        "markov_weights":      {k: round(v, 4) for k, v in _dynamic_markov_w.items()},
+        "markov_weight_range": {"min": MARKOV_WEIGHT_MIN, "max": MARKOV_WEIGHT_MAX},
+        "play_target":         {"min": TARGET_PLAY_MIN, "max": TARGET_PLAY_MAX},
+        "ev_thresholds":       {str(cls): {"multiplier": mult,
+                                           "min_prob": round(HIGH_MULT_EV_TARGET/mult, 4)}
+                                for cls, mult in HIGH_MULT_EV.items()},
+        "bonus_class_suppress": {
+            "window":      BONUS_CLASS_MISS_WINDOW,
+            "suppressed":  suppressed,
+            "suppressed_names": [CLASS_NAMES.get(c, str(c)) for c in suppressed],
+        },
+        "entropy_skip_streak": {
+            "current":      ces,
+            "grace":        ENTROPY_SKIP_GRACE,
+            "penalty_step": ENTROPY_SKIP_PENALTY,
+            "max_force":    ENTROPY_SKIP_MAX_FORCE,
+            "current_penalty": round(_compute_entropy_penalty(), 4),
+            "effective_threshold": round(_entropy_threshold - _compute_entropy_penalty(), 4),
+        },
+        "cluster_bonus": {
+            "window":          CLUSTER_WINDOW,
+            "min_count":       CLUSTER_MIN_COUNT,
+            "reduction_step":  CLUSTER_REDUCTION_STEP,
+            "reduction_max":   CLUSTER_REDUCTION_MAX,
+            "current_count":   hmc,
+            "current_reduction": round(cluster_red, 4),
+            "effective_threshold": round(_entropy_threshold - cluster_red, 4),
+        },
+    })
 
 # ── STARTUP ───────────────────────────────────────────────────────────────────
 def startup():
