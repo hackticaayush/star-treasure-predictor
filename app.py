@@ -62,7 +62,7 @@ PATTERN_GROUPS = {
     "cls8":      {"classes": {8},           "default_threshold": 4.0},
 }
 
-PATTERN_LOOKBACK_DEFAULT = 10
+PATTERN_LOOKBACK_DEFAULT = 7
 PATTERN_LOOKBACK_MIN     = 6
 PATTERN_LOOKBACK_MAX     = 10
 
@@ -368,9 +368,7 @@ def recalibrate_markov_weights(hit_bufs):
 # ── DYNAMIC PATTERN PARAMS ────────────────────────────────────────────────────
 def recalibrate_pattern_params(total_rounds, sim_hit_rate):
     global _dynamic_lookback, _dynamic_decay
-    new_lookback = max(PATTERN_LOOKBACK_MIN,
-                       min(PATTERN_LOOKBACK_MAX,
-                           int(6 + (total_rounds / 800) * 10)))
+    new_lookback = 7
     if sim_hit_rate < 0.50:
         new_decay = max(PATTERN_DECAY_MIN, _dynamic_decay - 0.03)
     elif sim_hit_rate > 0.68:
