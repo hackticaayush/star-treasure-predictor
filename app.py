@@ -445,6 +445,7 @@ def recalibrate_pattern_params(total_rounds, sim_hit_rate):
 
 # ── DYNAMIC BOOST EFFECTIVENESS ───────────────────────────────────────────────
 def recalibrate_boost_cap(boost_eval_log):
+    global _dynamic_boost_max, _dynamic_boost_min
     with _lock:
         cur_max = _dynamic_boost_max
         cur_min = _dynamic_boost_min
@@ -471,7 +472,6 @@ def recalibrate_boost_cap(boost_eval_log):
               f"(boosted={boosted_rate:.2%} unboosted={unboosted_rate:.2%}, "
               f"n_b={len(boosted_hits)} n_u={len(unboosted_hits)})")
     with _lock:
-        global _dynamic_boost_max, _dynamic_boost_min
         _dynamic_boost_max = new_max
         _dynamic_boost_min = new_min
 
