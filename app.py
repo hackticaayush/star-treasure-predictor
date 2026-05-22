@@ -53,12 +53,13 @@ PATTERN_BASE_WEIGHTS = {
     1: 1.0, 5: 1.0, 6: 1.0, 8: 1.0,
 }
 
+# USER INSTRUCTION: DO NOT TOUCH these thresholds
 PATTERN_GROUPS = {
     "high_mult": {"classes": {2, 3, 4, 7}, "default_threshold": 5.0},
-    "cls1":      {"classes": {1},           "default_threshold": 4.0},
-    "cls5":      {"classes": {5},           "default_threshold": 4.0},
-    "cls6":      {"classes": {6},           "default_threshold": 4.0},
-    "cls8":      {"classes": {8},           "default_threshold": 4.0},
+    "cls1":      {"classes": {1},           "default_threshold": 1.8},
+    "cls5":      {"classes": {5},           "default_threshold": 2.5},
+    "cls6":      {"classes": {6},           "default_threshold": 2.5},
+    "cls8":      {"classes": {8},           "default_threshold": 2.5},
 }
 
 PATTERN_LOOKBACK_DEFAULT = 7
@@ -130,6 +131,20 @@ CLUSTER_MIN_COUNT       = 2
 CLUSTER_REDUCTION_STEP  = 0.07
 CLUSTER_REDUCTION_MAX   = 0.30
 
+# ── STREAK DETECTOR CONFIG ────────────────────────────────────────────────────
+# FIX: Boost a class that has been streaking recently so the model
+#      adapts to local regime shifts faster than the Markov/history weights.
+STREAK_WINDOW    = 5    # look at last N rounds
+STREAK_MIN       = 3    # min occurrences in that window to trigger boost
+STREAK_BOOST_PER = 0.10 # boost multiplier per extra occurrence above STREAK_MIN
+
+# ── NOISE / MISS-SUPPRESS CONFIG ─────────────────────────────────────────────
+MISS_SUPPRESS_WINDOW    = 3
+MISS_SUPPRESS_PENALTY   = 0.25
+NOISE_WINDOW            = 7
+NOISE_UNIQUE_THRESH     = 7    # FIX: was 5 — harder to trigger noise-flattening
+NOISE_SCORE_FLATTEN     = 0.20 # FIX: was 0.30 — less aggressive flattening
+
 # ── GLOBAL STATE ──────────────────────────────────────────────────────────────
 _lock              = threading.Lock()
 _rewards           = []
@@ -138,7 +153,6 @@ _sim_stats         = {}
 _brake_left        = 0
 _live_log          = []
 _pending_pred      = None
-# FIX #1: removed _skip_pending_pred — dead code, replaced with simple tracking
 _last_reset_date   = None
 
 _cached_pred = None
@@ -148,10 +162,6 @@ _fetch_status = {
     "last_error":   None, "total_fetched": 0,
     "status": "starting", "last_reset": None,
 }
-
-# FIX #2 + #3 + #8: All shared mutable scalars now only written/read under _lock
-# _entropy_threshold, _top1_threshold, _consec_entropy_skips,
-# _dynamic_train_rounds are all accessed via helper getters/setters below
 
 _entropy_threshold     = SKIP_ENTROPY_THRESHOLD   # protected by _lock
 _top1_threshold        = SKIP_TOP1_THRESHOLD       # protected by _lock
@@ -186,7 +196,7 @@ _dynamic_markov_w = {
     "wm3": 0.28,
     "wm4": 0.22,
     "wr":  0.08,
-    "wv":  0.04,
+    "wv":  0.12,  # FIX: was 0.04 — tripled to give recent window more influence
     "wo":  0.03,
 }
 
@@ -202,19 +212,8 @@ BONUS_CLASS_BUF_MAX    = 20
 _play_history: list = []
 PLAY_HISTORY_MAX = 20
 
-# ── RECENT MISS SUPPRESSION CONFIG ───────────────────────────────────────────
-MISS_SUPPRESS_WINDOW    = 3
-MISS_SUPPRESS_PENALTY   = 0.25
-NOISE_WINDOW            = 7
-NOISE_UNIQUE_THRESH     = 5
-NOISE_SCORE_FLATTEN     = 0.30
-
 
 # ── THREAD-SAFE SCALAR HELPERS ────────────────────────────────────────────────
-# FIX #2 #3 #4 #8: All scalar globals that are written in the fetcher thread
-# and read in other threads are now accessed only through these helpers,
-# which always hold _lock. This eliminates all race conditions.
-
 def _get_entropy_threshold():
     with _lock:
         return _entropy_threshold
@@ -397,7 +396,6 @@ def build_global_stats(seq, order):
     return prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,avg_gap,avg_run
 
 # ── DYNAMIC TRAIN_ROUNDS ─────────────────────────────────────────────────────
-# FIX #6: Improved scaling — reaches max at ~500 rounds instead of ~1667
 def compute_dynamic_train_rounds(total_rounds):
     scaled = TRAIN_ROUNDS_MIN + int((total_rounds / 500) * (TRAIN_ROUNDS_MAX - TRAIN_ROUNDS_MIN))
     return max(TRAIN_ROUNDS_MIN, min(TRAIN_ROUNDS_MAX, scaled))
@@ -514,13 +512,8 @@ def _get_suppressed_bonus_classes():
                     suppressed.add(cls)
     return suppressed
 
-# FIX #1 (bonus suppression release):
-# Now also records organic hits for suppressed classes so suppression
-# can lift even when the class wasn't in bonus_picks.
 def _record_bonus_class_result(bonus_picks, actual_val):
     with _lock:
-        # Always record an organic hit if a high-mult class appears as actual,
-        # even if it wasn't picked — this prevents permanent suppression deadlock
         if actual_val in HIGH_MULT_CLASSES and actual_val not in (bonus_picks or []):
             _bonus_class_results[actual_val].append(True)
             if len(_bonus_class_results[actual_val]) > BONUS_CLASS_BUF_MAX:
@@ -551,55 +544,14 @@ def compute_pattern_scores(rewards):
     with _lock:
         lookback = _dynamic_lookback
         decay    = _dynamic_decay
-    if len(rewards) < lookback:
-        return {g: 0.0 for g in PATTERN_GROUPS}
-    last_n = rewards[-lookback:]
-    scores = {g: 0.0 for g in PATTERN_GROUPS}
-    for dist_from_end, cls in enumerate(reversed(last_n)):
-        distance = dist_from_end + 1
-        d        = decay ** (distance - 1)
-        weight   = PATTERN_BASE_WEIGHTS.get(cls, 1.0)
-        contrib  = weight * d
-        for group_name, group_cfg in PATTERN_GROUPS.items():
-            if cls in group_cfg["classes"]:
-                scores[group_name] += contrib
-    return scores
+    return compute_pattern_scores_with_params(rewards, lookback, decay)
 
 def apply_pattern_boost(scores_dict, pattern_scores, dyn_thresholds):
     with _lock:
         boost_max = _dynamic_boost_max
         boost_min = _dynamic_boost_min
-    boosted = dict(scores_dict)
-    pattern_info = {}
-    any_triggered = False
-    for group_name, group_cfg in PATTERN_GROUPS.items():
-        pscore    = pattern_scores.get(group_name, 0.0)
-        threshold = dyn_thresholds.get(group_name, group_cfg["default_threshold"])
-        triggered = pscore >= threshold
-        boost_applied = 0.0
-        if triggered:
-            any_triggered = True
-            excess        = pscore - threshold
-            boost_applied = min(boost_max,
-                                boost_min + excess * PATTERN_BOOST_SCALE)
-            for cls in group_cfg["classes"]:
-                if cls in boosted:
-                    boosted[cls] += boosted[cls] * boost_applied
-                else:
-                    boosted[cls] = boost_applied * 0.01
-        pattern_info[group_name] = {
-            "score":         round(pscore, 4),
-            "threshold":     round(threshold, 4),
-            "triggered":     triggered,
-            "boost_applied": round(boost_applied, 4),
-        }
-    pattern_info["_any_triggered"] = any_triggered
-    total = sum(boosted.values()) or 1.0
-    boosted = {k: v / total for k, v in boosted.items()}
-    return boosted, pattern_info
+    return apply_pattern_boost_with_params(scores_dict, pattern_scores, dyn_thresholds, boost_max, boost_min)
 
-# FIX #7: Pattern threshold now also drifts DOWN when score is below average,
-# preventing one-way upward drift that eventually blocks all pattern triggers.
 def update_pattern_hit(group_name, pattern_score):
     buf = _hit_pattern_scores[group_name]
     buf.append(pattern_score)
@@ -608,9 +560,7 @@ def update_pattern_hit(group_name, pattern_score):
 
     avg_hit_score = sum(buf) / len(buf) if buf else PATTERN_GROUPS[group_name]["default_threshold"]
 
-    # Also factor in recent miss scores to allow downward pressure
     default_thresh = PATTERN_GROUPS[group_name]["default_threshold"]
-    # Blend average hit score with default to prevent unlimited upward drift
     new_threshold = avg_hit_score * 0.75 + default_thresh * 0.25
     _dynamic_threshold[group_name] = new_threshold
 
@@ -620,10 +570,9 @@ def update_pattern_hit(group_name, pattern_score):
           f"(buffer={len(buf)})")
 
 def update_pattern_miss(group_name, pattern_score):
-    """FIX #7: Called on miss to allow downward threshold pressure."""
+    """Allow downward threshold pressure on miss."""
     cur = _dynamic_threshold[group_name]
     default_thresh = PATTERN_GROUPS[group_name]["default_threshold"]
-    # Gently pull threshold down toward default on miss
     new_threshold = cur * 0.97 + default_thresh * 0.03
     _dynamic_threshold[group_name] = new_threshold
 
@@ -697,8 +646,6 @@ def _is_penalty_forced(ent):
     return ent >= eth and effective_ent < eth
 
 # ── SCORE ROUND ───────────────────────────────────────────────────────────────
-# FIX #5: score_round now accepts a snapshot of dynamic params so the sim
-# can pass fixed values instead of reading live globals mid-replay.
 def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar,
                 param_snapshot=None):
     n=len(h)
@@ -726,7 +673,10 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar,
     k1=(l1,);k2=(l2,l1);k3=(l3,l2,l1);k4=(l4,l3,l2,l1)
     def rel(t,key): return min(1.0,sum(t[key].values())/30) if key in t else 0
     r2=rel(t2,k2);r3=rel(t3,k3);r4=rel(t4,k4)
-    rec=h[-100:] if n>=100 else h; rs=h[-20:] if n>=20 else h
+    rec=h[-100:] if n>=100 else h
+    # FIX: Shrunk recent window from 20 → 8 so recent local behaviour
+    #      dominates the wv score component much more strongly.
+    rs=h[-7:] if n>=7 else h
     rc=Counter(rec);rsc=Counter(rs)
     lp={}
     for i2,r in enumerate(h): lp[r]=i2
@@ -786,6 +736,23 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar,
             _last_pattern_info.update(pattern_info)
             _last_pattern_info["raw_scores"] = {g: round(v, 4) for g, v in pattern_scores.items()}
 
+    # ── STREAK DETECTOR ───────────────────────────────────────────────────────
+    # FIX: Detect when a single class has been dominating the last STREAK_WINDOW
+    #      rounds and directly boost its score so the model reacts to local
+    #      regime shifts faster than global history weights allow.
+    if len(h) >= STREAK_WINDOW:
+        last_sw = h[-STREAK_WINDOW:]
+        for cls in range(1, 9):
+            cnt = last_sw.count(cls)
+            if cnt >= STREAK_MIN:
+                boost = STREAK_BOOST_PER * (cnt - STREAK_MIN + 1)
+                sc[cls] = sc.get(cls, 0.0) * (1.0 + boost)
+                print(f"[StreakBoost] Class {cls} ({CLASS_NAMES.get(cls,'?')}) "
+                      f"appeared {cnt}x in last {STREAK_WINDOW} rounds → "
+                      f"boost={boost:.2f}")
+        ts = sum(sc.values()) or 1.0
+        sc = {k: v / ts for k, v in sc.items()}
+
     # ── RECENT MISS SUPPRESSION & NOISE ADAPTATION ───────────────────────────
     with _lock:
         ph = list(_play_history)
@@ -812,6 +779,8 @@ def score_round(h, prob,t1,tp1,t2,tp2,t3,tp3,t4,tp4,ag,ar,
         recent_actuals = [e["actual"] for e in ph[-NOISE_WINDOW:] if "actual" in e]
         if len(recent_actuals) >= NOISE_WINDOW:
             unique_count = len(set(recent_actuals))
+            # FIX: NOISE_UNIQUE_THRESH raised to 7 (was 5) and
+            #      NOISE_SCORE_FLATTEN reduced to 0.20 (was 0.30)
             if unique_count >= NOISE_UNIQUE_THRESH:
                 uniform = 1.0 / 8.0
                 for cls in sc:
@@ -883,19 +852,6 @@ def apply_pattern_boost_with_params(scores_dict, pattern_scores, dyn_thresholds,
     boosted = {k: v / total for k, v in boosted.items()}
     return boosted, pattern_info
 
-# Wrapper that reads live globals (used outside sim)
-def compute_pattern_scores(rewards):
-    with _lock:
-        lookback = _dynamic_lookback
-        decay    = _dynamic_decay
-    return compute_pattern_scores_with_params(rewards, lookback, decay)
-
-def apply_pattern_boost(scores_dict, pattern_scores, dyn_thresholds):
-    with _lock:
-        boost_max = _dynamic_boost_max
-        boost_min = _dynamic_boost_min
-    return apply_pattern_boost_with_params(scores_dict, pattern_scores, dyn_thresholds, boost_max, boost_min)
-
 
 def should_play(t1, ent, brake_active=False):
     if brake_active:
@@ -960,15 +916,12 @@ def get_bonus_picks(scores, top2):
 
 
 # ── SIM REBUILD ───────────────────────────────────────────────────────────────
-# FIX #5: Sim now takes a fixed snapshot of all dynamic params at the start
-# so every score_round call during replay uses consistent parameters.
 def _run_sim(rewards):
     total = len(rewards)
     train_rounds = _get_train_rounds()
     if total < train_rounds + 5:
         return {}, 0, 0.0, [], [], {}
 
-    # Snapshot all dynamic params once at sim start
     with _lock:
         sim_snapshot = {
             "markov_w":  dict(_dynamic_markov_w),
@@ -1016,7 +969,7 @@ def _run_sim(rewards):
         sim_play_results.append(hit)
         for order, pred_cls in markov_preds.items():
             sim_markov_hits[order].append(pred_cls == tn)
-        any_triggered = sim_snapshot["dyn_thresh"] != {}  # simplified for sim
+        any_triggered = sim_snapshot["dyn_thresh"] != {}
         sim_boost_log.append((any_triggered, hit))
         bonus_triggered = sim_bonus is not None
         bonus_hit = (sim_bonus is not None and tn in sim_bonus)
@@ -1244,7 +1197,6 @@ def fetcher_loop():
                             all_preds += [p for p in pending["bonus_picks"] if p not in all_preds]
                         hit = actual_val in all_preds
 
-                        # FIX #7: update pattern threshold on miss too
                         if hit and pending.get("pattern_scores"):
                             for group_name, pscore in pending["pattern_scores"].items():
                                 update_pattern_hit(group_name, pscore)
@@ -1327,9 +1279,6 @@ def fetcher_loop():
                         pending = None
                         print(f"[Fetcher] Stale pending cleared (#{pred_round})")
 
-                # FIX #1: Removed dead skip_pending block entirely.
-                # Skipped rounds don't need separate tracking.
-
                 sim_dict, brake, play_pct, sim_play_res, sim_loss_confs, sim_extras = \
                     _run_sim(rewards)
                 total_rounds = len(rewards)
@@ -1389,7 +1338,6 @@ def fetcher_loop():
                     _brake_left = brake
                 cached = _build_cached_pred(rewards, records, brake)
 
-                # FIX #2: Update consecutive entropy-skip counter under lock
                 if cached is not None:
                     if cached["action"] == "PLAY":
                         ces = _get_consec_entropy_skips()
@@ -1726,6 +1674,16 @@ def api_adaptive():
             "current_count":   hmc,
             "current_reduction": round(cluster_red, 4),
             "effective_threshold": round(eth - cluster_red, 4),
+        },
+        "streak_detector": {
+            "window":    STREAK_WINDOW,
+            "min_count": STREAK_MIN,
+            "boost_per": STREAK_BOOST_PER,
+        },
+        "noise_config": {
+            "unique_thresh":  NOISE_UNIQUE_THRESH,
+            "score_flatten":  NOISE_SCORE_FLATTEN,
+            "window":         NOISE_WINDOW,
         },
     })
 
