@@ -719,7 +719,7 @@ function buildWaitingHTML(modeData, prevDay) {
     prevHTML = `
       <div class="prev-section-hdr">Yesterday · ${prevDay.date||'Previous Day'}</div>
       ${statsGrid}
-      <div class="pdist-card"><div class="pdist-title">Planet Distribution</div>${distRows}</div>
+      <div class="pdist-card"><div class="pdist-title">Planet Distribution</div>${distRows}</div>`;
   }
 
   return `
@@ -735,6 +735,7 @@ function buildWaitingHTML(modeData, prevDay) {
         </div>
       </div>
       <div class="wait-planets-row">${planets}</div>
+      ${techHTML}
       ${prevHTML}
       <div class="disc">DATA SHOWN IS FROM PREVIOUS DAY · SYSTEM WARMING UP</div>
     </div>`;
