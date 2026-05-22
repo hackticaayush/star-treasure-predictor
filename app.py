@@ -142,7 +142,7 @@ STREAK_BOOST_PER = 0.10 # boost multiplier per extra occurrence above STREAK_MIN
 MISS_SUPPRESS_WINDOW    = 3
 MISS_SUPPRESS_PENALTY   = 0.25
 NOISE_WINDOW            = 7
-NOISE_UNIQUE_THRESH     = 7    # FIX: was 5 — harder to trigger noise-flattening
+NOISE_UNIQUE_THRESH     = 6    # FIX: was 5 — harder to trigger noise-flattening
 NOISE_SCORE_FLATTEN     = 0.20 # FIX: was 0.30 — less aggressive flattening
 
 # ── GLOBAL STATE ──────────────────────────────────────────────────────────────
