@@ -237,6 +237,61 @@ body{font-family:'Nunito',sans-serif;min-height:100vh;background:#07052a;color:#
   .planet-img.sm{width:54px;height:54px;}
   .planet-wrap.sm{width:60px;height:60px;}
 }
+
+/* ── WAITING SCREEN (cooldown / warmup) ──────────────────────────────────── */
+.wait-wrap{padding:4px 0 40px;}
+
+.wait-banner{text-align:center;padding:18px 16px 14px;margin-bottom:10px;}
+.wait-mode-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(0,229,255,0.08);border:1px solid rgba(0,229,255,0.3);border-radius:20px;padding:5px 16px;font-size:11px;font-weight:800;color:var(--cyan);letter-spacing:2px;margin-bottom:14px;animation:pulse-badge 2.5s ease-in-out infinite;}
+@keyframes pulse-badge{0%,100%{box-shadow:0 0 0 0 rgba(0,229,255,0.2)}50%{box-shadow:0 0 0 8px rgba(0,229,255,0)}}
+.wait-title{font-family:'Lilita One',cursive;font-size:24px;background:linear-gradient(180deg,#fff 0%,#ffd700 50%,#ff9800 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 2px 14px rgba(255,200,0,0.4));margin-bottom:6px;line-height:1.25;}
+.wait-sub{font-size:12px;color:var(--muted);}
+
+.countdown-card{background:rgba(6,4,32,0.88);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);border:1.5px solid rgba(255,215,0,0.28);border-radius:22px;padding:20px 14px 18px;margin-bottom:12px;text-align:center;box-shadow:0 0 60px rgba(255,215,0,0.07),0 8px 40px rgba(0,0,0,0.6);}
+.cd-label{font-size:10px;font-weight:800;color:rgba(255,215,0,0.45);letter-spacing:2.5px;text-transform:uppercase;margin-bottom:14px;}
+.cd-display{display:flex;align-items:center;justify-content:center;gap:6px;}
+.cd-unit{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:70px;}
+.cd-num{font-family:'Lilita One',cursive;font-size:50px;color:var(--gold);line-height:1;text-shadow:0 0 40px rgba(255,215,0,0.45);}
+.cd-lbl{font-size:9px;font-weight:800;color:rgba(255,215,0,0.38);letter-spacing:2px;}
+.cd-sep{font-family:'Lilita One',cursive;font-size:40px;color:rgba(255,215,0,0.28);margin-bottom:14px;animation:blink 1.1s infinite;}
+
+.wait-planets-row{display:flex;justify-content:center;align-items:flex-end;gap:2px;padding:10px 0 14px;overflow:hidden;}
+.wfp{display:flex;flex-direction:column;align-items:center;gap:3px;flex:1;max-width:50px;}
+.wfp-img{width:42px;height:42px;object-fit:contain;}
+.wfp:nth-child(1) .wfp-img{animation:pfloat 3.2s ease-in-out 0s infinite;}
+.wfp:nth-child(2) .wfp-img{animation:pfloat 3.2s ease-in-out -0.4s infinite;}
+.wfp:nth-child(3) .wfp-img{animation:pfloat 3.2s ease-in-out -0.8s infinite;}
+.wfp:nth-child(4) .wfp-img{animation:pfloat 3.2s ease-in-out -1.2s infinite;}
+.wfp:nth-child(5) .wfp-img{animation:pfloat 3.2s ease-in-out -1.6s infinite;}
+.wfp:nth-child(6) .wfp-img{animation:pfloat 3.2s ease-in-out -2.0s infinite;}
+.wfp:nth-child(7) .wfp-img{animation:pfloat 3.2s ease-in-out -2.4s infinite;}
+.wfp:nth-child(8) .wfp-img{animation:pfloat 3.2s ease-in-out -2.8s infinite;}
+.wfp-lbl{font-size:7px;font-weight:800;text-align:center;line-height:1.2;opacity:0.7;}
+
+.prev-section-hdr{display:flex;align-items:center;gap:10px;padding:14px 0 12px;font-family:'Lilita One',cursive;font-size:14px;color:var(--gold);}
+.prev-section-hdr::before,.prev-section-hdr::after{content:'';flex:1;height:1px;background:rgba(255,215,0,0.18);}
+
+.pstat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;}
+.pstat{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:14px;padding:14px 6px 12px;text-align:center;}
+.pstat-val{font-family:'Lilita One',cursive;font-size:24px;line-height:1;}
+.pstat-val.g{color:var(--green)}.pstat-val.r{color:var(--red)}.pstat-val.w{color:var(--gold)}.pstat-val.c{color:var(--cyan)}.pstat-val.m{color:#c084fc;}
+.pstat-lbl{font-size:10px;color:var(--muted);margin-top:3px;font-weight:700;}
+
+.pdist-card{background:var(--card);backdrop-filter:blur(20px);border:1px solid var(--cbord);border-radius:var(--r);padding:16px;margin-bottom:10px;}
+.pdist-title{font-family:'Lilita One',cursive;font-size:13px;color:var(--gold);letter-spacing:1px;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.pdist-title::after{content:'';flex:1;height:1px;background:rgba(255,215,0,0.18);}
+.pdist-item{display:grid;grid-template-columns:34px 1fr 52px;align-items:center;gap:8px;margin-bottom:10px;}
+.pdist-img{width:32px;height:32px;object-fit:contain;}
+.pdist-info{min-width:0;}
+.pdist-name{font-size:12px;font-weight:800;margin-bottom:3px;}
+.pdist-bar-wrap{height:5px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden;}
+.pdist-bar{height:100%;border-radius:3px;transition:width 1.2s ease;}
+.pdist-cnt{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);text-align:right;white-space:nowrap;}
+
+.prev-results-card{background:var(--card);border:1px solid var(--cbord);border-radius:var(--r);padding:16px;margin-bottom:10px;}
+.prev-results-title{font-family:'Lilita One',cursive;font-size:13px;color:var(--gold);letter-spacing:1px;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.prev-results-title::after{content:'';flex:1;height:1px;background:rgba(255,215,0,0.18);}
+
 </style>
 </head>
 <body>
@@ -506,8 +561,217 @@ const img = (idx, cls='', sty='') =>
   `<img src="${BALL[idx]||''}" alt="${NAMES[idx]||idx}" class="${cls}" style="${sty}" loading="lazy" onerror="this.style.opacity='.3'">`;
 
 let cdEl=null, countdown=5, lastRound=null;
+let _waitCdInterval = null;   // countdown interval for waiting screen
+let _currentMode    = null;   // track last-seen mode to avoid full re-render every tick
 
-function buildUI(pred, stats, history, status) {
+/* ── WAITING SCREEN BUILDER ─────────────────────────────────────────────── */
+function buildWaitingHTML(modeData, prevDay) {
+  const isCooldown = modeData.mode === 'cooldown';
+  const h12  = modeData.live_hour_12 || 4;
+  const ampm = modeData.live_ampm    || 'PM';
+  const lm   = String(modeData.live_minute || 0).padStart(2,'0');
+
+  const modeBadge = isCooldown ? '🌙 SYSTEM COOLDOWN' : '⏳ WARMING UP';
+  const waitTitle = isCooldown
+    ? 'Analysis Begins at 08:30 AM'
+    : `Game Starts at ${h12}:${lm} ${ampm} IST`;
+  const waitSub = isCooldown
+    ? 'Daily reset complete · Loading historical data'
+    : 'Everything is being prepared · Get ready to play!';
+
+  const secs = modeData.secs_left || 0;
+  const hh = String(Math.floor(secs / 3600)).padStart(2,'0');
+  const mm = String(Math.floor((secs % 3600) / 60)).padStart(2,'0');
+  const ss = String(secs % 60).padStart(2,'0');
+
+  // Floating planets row (all 8)
+  const planets = [1,2,3,4,5,6,7,8].map(i => `
+    <div class="wfp">
+      <img src="${BALL[i]}" class="wfp-img" alt="${NAMES[i]}"
+           style="filter:drop-shadow(0 0 8px ${COLORS[i]}90)" loading="lazy">
+      <div class="wfp-lbl" style="color:${COLORS[i]}">${NAMES[i].replace(' Times','×')}</div>
+    </div>`).join('');
+
+  let prevHTML = '';
+  if (prevDay) {
+    const acc = prevDay.accuracy || 0;
+    const accCls = acc >= 65 ? 'g' : acc >= 55 ? 'w' : 'r';
+
+    /* Stats grid */
+    const statsGrid = `
+      <div class="pstat-grid">
+        <div class="pstat"><div class="pstat-val ${accCls}">${acc}%</div><div class="pstat-lbl">Accuracy</div></div>
+        <div class="pstat"><div class="pstat-val g">${prevDay.hits}</div><div class="pstat-lbl">Hits ✓</div></div>
+        <div class="pstat"><div class="pstat-val r">${prevDay.misses}</div><div class="pstat-lbl">Misses ✗</div></div>
+        <div class="pstat"><div class="pstat-val c">${prevDay.played}</div><div class="pstat-lbl">Played</div></div>
+        <div class="pstat"><div class="pstat-val w">${prevDay.max_win_streak}</div><div class="pstat-lbl">Best Win</div></div>
+        <div class="pstat"><div class="pstat-val m">${prevDay.total_rounds}</div><div class="pstat-lbl">Total Rounds</div></div>
+      </div>`;
+
+    /* Planet distribution */
+    const dist = prevDay.planet_dist || {};
+    const total = prevDay.total_rounds || 1;
+    const maxCnt = Math.max(...Object.values(dist).map(Number));
+    const distRows = [1,2,3,4,5,6,7,8]
+      .filter(i => dist[String(i)] != null)
+      .sort((a,b) => (dist[String(b)]||0) - (dist[String(a)]||0))
+      .map(i => {
+        const cnt  = dist[String(i)] || 0;
+        const pct  = Math.round(cnt / total * 100);
+        const barW = maxCnt ? Math.round(cnt / maxCnt * 100) : 0;
+        const col  = COLORS[i] || '#fff';
+        return `
+          <div class="pdist-item">
+            ${img(i,'pdist-img','')}
+            <div class="pdist-info">
+              <div class="pdist-name" style="color:${col}">${NAMES[i]||i}</div>
+              <div class="pdist-bar-wrap">
+                <div class="pdist-bar" style="width:${barW}%;background:${col}"></div>
+              </div>
+            </div>
+            <div class="pdist-cnt">${cnt} <span style="opacity:.45">(${pct}%)</span></div>
+          </div>`;
+      }).join('');
+
+    /* Sample results */
+    const sampleRows = (prevDay.sample_results || []).map(r => {
+      const hit = r.hit;
+      return `<div class="rrow2 ${hit?'hit':'miss'}">
+        <div class="rround">#${r.round}</div>
+        <div class="rpreds">
+          <div class="rball">${img(r.pred1,'','width:22px;height:22px;object-fit:contain')}</div>
+          <div class="rball">${img(r.pred2,'','width:22px;height:22px;object-fit:contain')}</div>
+        </div>
+        <div class="ract">
+          ${img(r.actual,'','width:26px;height:26px;object-fit:contain')}
+          <span class="rbadge ${hit?'hit':'miss'}">${hit?'✓ HIT':'✗ MISS'}</span>
+        </div>
+      </div>`;
+    }).join('');
+
+    prevHTML = `
+      <div class="prev-section-hdr">📊 Yesterday · ${prevDay.date||'Previous Day'}</div>
+      ${statsGrid}
+      <div class="pdist-card">
+        <div class="pdist-title">Planet Distribution</div>
+        ${distRows}
+      </div>
+      ${sampleRows ? `<div class="prev-results-card">
+        <div class="prev-results-title">Sample Results</div>
+        <div class="rlist">${sampleRows}</div>
+      </div>` : ''}`;
+  }
+
+  return `
+    <div class="wait-wrap">
+      <div class="wait-banner">
+        <div class="wait-mode-badge">${modeBadge}</div>
+        <div class="wait-title">${waitTitle}</div>
+        <div class="wait-sub">${waitSub}</div>
+      </div>
+
+      <div class="countdown-card">
+        <div class="cd-label">Starts In</div>
+        <div class="cd-display">
+          <div class="cd-unit"><span class="cd-num" id="wcd-h">${hh}</span><span class="cd-lbl">HRS</span></div>
+          <div class="cd-sep">:</div>
+          <div class="cd-unit"><span class="cd-num" id="wcd-m">${mm}</span><span class="cd-lbl">MIN</span></div>
+          <div class="cd-sep">:</div>
+          <div class="cd-unit"><span class="cd-num" id="wcd-s">${ss}</span><span class="cd-lbl">SEC</span></div>
+        </div>
+      </div>
+
+      <div class="wait-planets-row">${planets}</div>
+
+      ${prevHTML}
+      <div class="disc">DATA SHOWN IS FROM PREVIOUS DAY · SYSTEM WARMING UP</div>
+    </div>`;
+}
+
+function startWaitCountdown(secsLeft) {
+  if (_waitCdInterval) clearInterval(_waitCdInterval);
+  let rem = secsLeft;
+  _waitCdInterval = setInterval(() => {
+    if (rem > 0) rem--;
+    const hEl = document.getElementById('wcd-h');
+    const mEl = document.getElementById('wcd-m');
+    const sEl = document.getElementById('wcd-s');
+    if (hEl) hEl.textContent = String(Math.floor(rem/3600)).padStart(2,'0');
+    if (mEl) mEl.textContent = String(Math.floor((rem%3600)/60)).padStart(2,'0');
+    if (sEl) sEl.textContent = String(rem%60).padStart(2,'0');
+    if (rem === 0) {
+      clearInterval(_waitCdInterval);
+      _waitCdInterval = null;
+      _currentMode = null;  // force full re-render on next tick
+    }
+  }, 1000);
+}
+
+/* ── MAIN REFRESH ───────────────────────────────────────────────────────── */
+async function doRefresh() {
+  let modeData = { mode: 'live', secs_left: 0 };
+  try {
+    const r = await fetch('/api/mode');
+    if (r.ok) modeData = await r.json();
+  } catch(e) { console.warn('Mode fetch failed:', e); }
+
+  if (modeData.mode !== 'live') {
+    // Update status pill
+    document.getElementById('statusText').textContent =
+      modeData.mode === 'cooldown' ? '🌙 Cooldown' : '⏳ Warming Up';
+
+    // Only rebuild HTML when mode first changes (avoid resetting countdown every 5s)
+    if (_currentMode !== modeData.mode) {
+      _currentMode = modeData.mode;
+      let prevDay = null;
+      try {
+        const r2 = await fetch('/api/prev_day');
+        if (r2.ok) prevDay = await r2.json();
+      } catch(e) {}
+      document.getElementById('app').innerHTML = buildWaitingHTML(modeData, prevDay);
+      startWaitCountdown(modeData.secs_left || 0);
+    }
+    countdown = 30;  // slow refresh during waiting
+  } else {
+    // Live mode — clear waiting interval if any
+    if (_waitCdInterval) { clearInterval(_waitCdInterval); _waitCdInterval = null; }
+    _currentMode = 'live';
+    await refreshAll();
+    countdown = 5;   // normal 5-second refresh
+  }
+}
+
+async function refreshAll(){
+  try{
+    document.getElementById('statusText').textContent='Refreshing...';
+    const [pR,sR,hR,stR]=await Promise.all([
+      fetch('/api/predict'),fetch('/api/stats'),
+      fetch('/api/history'),fetch('/api/status'),
+    ]);
+    if(!pR.ok)throw new Error('Not ready');
+    const [pred,stats,history,status]=await Promise.all([
+      pR.json(),sR.json(),hR.json(),stR.ok?stR.json():{},
+    ]);
+    buildUI(pred,stats,history,status);
+    document.getElementById('statusText').textContent='Live';
+    countdown=5;
+  }catch(e){
+    document.getElementById('statusText').textContent='Error';
+    console.error(e);
+  }
+}
+
+function launchApp() {
+  showScreen('s-app');
+  cdEl = document.getElementById('cdNum');
+  doRefresh();
+  setInterval(()=>{
+    countdown--;
+    const el = document.getElementById('cdNum');
+    if(el) el.textContent = Math.max(0, countdown);
+    if(countdown<=0){ doRefresh(); }
+  },1000);
+}
   const isPlay = pred.action === 'PLAY';
   const bonus  = pred.bonus_picks || null;
   // skip_show_bonus_only: true when SKIP + bonus exists → hide main picks, show bonus only
@@ -730,36 +994,6 @@ function buildUI(pred, stats, history, status) {
     if(el){el.style.boxShadow='0 0 70px rgba(255,215,0,0.22)';setTimeout(()=>el.style.boxShadow='',2200);}
   }
   lastRound=pred.latest_round;
-}
-
-async function refreshAll(){
-  try{
-    document.getElementById('statusText').textContent='Refreshing...';
-    const [pR,sR,hR,stR]=await Promise.all([
-      fetch('/api/predict'),fetch('/api/stats'),
-      fetch('/api/history'),fetch('/api/status'),
-    ]);
-    if(!pR.ok)throw new Error('Not ready');
-    const [pred,stats,history,status]=await Promise.all([
-      pR.json(),sR.json(),hR.json(),stR.ok?stR.json():{},
-    ]);
-    buildUI(pred,stats,history,status);
-    document.getElementById('statusText').textContent='Live';
-    countdown=5;
-  }catch(e){
-    document.getElementById('statusText').textContent='Error';
-    console.error(e);
-  }
-}
-
-function launchApp() {
-  showScreen('s-app');
-  refreshAll();
-  setInterval(()=>{
-    countdown--;
-    if(cdEl)cdEl.textContent=Math.max(0,countdown);
-    if(countdown<=0){countdown=5;refreshAll();}
-  },1000);
 }
 
 if ('serviceWorker' in navigator) {
