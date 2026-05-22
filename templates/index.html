@@ -282,6 +282,7 @@ body{font-family:'Nunito',sans-serif;min-height:100vh;background:#07052a;color:#
 .prev-results-card{background:var(--card);border:1px solid var(--cbord);border-radius:var(--r);padding:16px;margin-bottom:10px;}
 .prev-results-title{font-family:'Lilita One',cursive;font-size:13px;color:var(--gold);letter-spacing:1px;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
 .prev-results-title::after{content:'';flex:1;height:1px;background:rgba(255,215,0,0.18);}
+.crafted-line{font-size:11px;color:rgba(255,215,0,0.55);font-weight:700;letter-spacing:0.5px;margin-top:6px;font-family:'Nunito',sans-serif;}
 </style>
 </head>
 <body>
@@ -355,6 +356,7 @@ body{font-family:'Nunito',sans-serif;min-height:100vh;background:#07052a;color:#
         <span class="cdot"></span>
         <span style="font-size:11px;color:var(--muted);">Refresh in <span class="pill-cd"><span id="cdNum">5</span>s</span></span>
       </div>
+      <div class="crafted-line">Crafted by heart ❤️ — Ayansh ✨</div>
     </div>
     <div id="app">
       <div class="loading">
@@ -688,19 +690,13 @@ function buildWaitingHTML(modeData, prevDay) {
       </div>`;
     }).join('');
     prevHTML = `
-      <div class="prev-section-hdr">📊 Yesterday · ${prevDay.date||'Previous Day'}</div>
+      <div class="prev-section-hdr">Yesterday · ${prevDay.date||'Previous Day'}</div>
       ${statsGrid}
       <div class="pdist-card"><div class="pdist-title">Planet Distribution</div>${distRows}</div>
-      ${sampleRows ? `<div class="prev-results-card"><div class="prev-results-title">Sample Results</div><div class="rlist">${sampleRows}</div></div>` : ''}`;
   }
 
   return `
     <div class="wait-wrap">
-      <div class="wait-banner">
-        <div class="wait-mode-badge">${modeBadge}</div>
-        <div class="wait-title">${waitTitle}</div>
-        <div class="wait-sub">${waitSub}</div>
-      </div>
       <div class="countdown-card">
         <div class="cd-label">Starts In</div>
         <div class="cd-display">
