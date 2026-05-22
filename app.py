@@ -37,6 +37,16 @@ RESET_HOUR_IST   = 5
 RESET_MINUTE_IST = 30
 IST              = pytz.timezone("Asia/Kolkata")
 
+# ── COOLDOWN / WARMUP / LIVE SCHEDULE ─────────────────────────────────────────
+# 05:30 – 08:30  → cooldown   (reset happened, model data loading)
+# 08:30 – 16:00  → warmup     (model plays internally, NOT shown to user)
+# 16:00 – 05:30  → live       (show everything to user)
+# NOTE: Change LIVE_START_HOUR back to 11 for production (currently 16 for testing)
+COOLDOWN_END_HOUR   = 8
+COOLDOWN_END_MINUTE = 30
+LIVE_START_HOUR     = 16   # ← change to 11 for production
+LIVE_START_MINUTE   = 0
+
 CLASS_NAMES  = {1:"Purple",2:"10x",3:"25x",4:"15x",5:"Yellow",6:"Lt. Green",7:"50x",8:"Dk. Green"}
 CLASS_COLORS = {1:"#a855f7",2:"#ef4444",3:"#f97316",4:"#eab308",5:"#facc15",6:"#22c55e",7:"#06b6d4",8:"#16a34a"}
 
@@ -311,6 +321,83 @@ def _do_reset():
 
     _last_reset_date = now_ist.date()
     print("[Reset] All data cleared.")
+
+# ── MODE HELPERS ──────────────────────────────────────────────────────────────
+def get_current_mode():
+    """Returns 'cooldown', 'warmup', or 'live' based on current IST time."""
+    now = datetime.now(IST)
+    total_min   = now.hour * 60 + now.minute
+    reset_min   = RESET_HOUR_IST   * 60 + RESET_MINUTE_IST    # 330  (05:30)
+    coolend_min = COOLDOWN_END_HOUR * 60 + COOLDOWN_END_MINUTE # 510  (08:30)
+    live_min    = LIVE_START_HOUR   * 60 + LIVE_START_MINUTE   # 960  (16:00)
+    if reset_min <= total_min < coolend_min:
+        return "cooldown"
+    elif coolend_min <= total_min < live_min:
+        return "warmup"
+    else:
+        return "live"
+
+def _prev_day_fake():
+    """Generate deterministic fake previous-day data for cooldown/warmup screen."""
+    import random
+    now_ist = datetime.now(IST)
+    # seed = today's date so data is stable all day but changes each day
+    seed = int(now_ist.strftime("%Y%m%d"))
+    rng  = random.Random(seed)
+
+    total    = rng.randint(188, 218)
+    played   = int(total * rng.uniform(0.47, 0.54))
+    hits     = int(played * rng.uniform(0.61, 0.72))
+    misses   = played - hits
+    accuracy = round(hits / played * 100, 1) if played else 0
+
+    # Planet distribution — small-mult more frequent (mirrors real distribution)
+    base  = {1:17, 5:18, 6:16, 8:15, 2:11, 4:9, 3:7, 7:4}
+    noise = {k: base[k] + rng.uniform(-3, 3) for k in base}
+    tot_w = sum(noise.values())
+    dist  = {}
+    rem   = total
+    items = sorted(noise.items())
+    for idx, (cls, w) in enumerate(items):
+        if idx == len(items) - 1:
+            dist[str(cls)] = max(1, rem)
+        else:
+            cnt = max(1, int(total * w / tot_w))
+            dist[str(cls)] = cnt
+            rem -= cnt
+
+    max_win  = rng.randint(3, 9)
+    max_loss = rng.randint(2, 5)
+
+    # 15 sample played rounds
+    small = [1, 5, 6, 8]
+    results = []
+    for i in range(15):
+        p1     = rng.choice(small)
+        p2     = rng.choice([c for c in small if c != p1])
+        actual = rng.choices(
+            [1, 2, 3, 4, 5, 6, 7, 8],
+            weights=[17, 10, 6, 8, 17, 15, 4, 15], k=1
+        )[0]
+        results.append({
+            "round": 4990 + i, "pred1": p1, "pred2": p2,
+            "actual": actual,  "hit":   actual in (p1, p2),
+        })
+
+    from datetime import timedelta
+    prev_date = (now_ist - timedelta(days=1)).strftime("%d %b %Y")
+    return {
+        "date":            prev_date,
+        "total_rounds":    total,
+        "played":          played,
+        "hits":            hits,
+        "misses":          misses,
+        "accuracy":        accuracy,
+        "planet_dist":     dist,
+        "max_win_streak":  max_win,
+        "max_loss_streak": max_loss,
+        "sample_results":  results,
+    }
 
 # ── FILE HELPERS ──────────────────────────────────────────────────────────────
 def _load_file():
@@ -1052,6 +1139,24 @@ def _build_cached_pred(rewards, raw_rounds, brake):
     stats = build_global_stats(rewards, order=4)
     top2, scores, ent, t1s, t2s, t3s, t3c, _ = score_round(rewards, *stats)
 
+    # ── Enforce at least 2 lower-multiplier picks in display ─────────────────
+    # High-mult classes (2,3,4,7) go to bonus section; main picks stay low-mult.
+    _t1s_for_play = t1s   # preserve original top-1 score for play/skip logic
+    _LOW_MULT     = {1, 5, 6, 8}
+    if any(c not in _LOW_MULT for c in top2):
+        _rk  = sorted(scores.items(), key=lambda x: -x[1])
+        _sm  = [k for k, v in _rk if k in _LOW_MULT]
+        if len(_sm) >= 2:
+            _old = list(top2)
+            top2 = [_sm[0], _sm[1]]
+            t1s  = scores.get(top2[0], t1s)
+            t2s  = scores.get(top2[1], t2s)
+            _used = set(top2)
+            _rest = [(k, v) for k, v in _rk if k not in _used]
+            t3c = _rest[0][0] if _rest else None
+            t3s = _rest[0][1] if _rest else 0.0
+            print(f"[LowMult] Display enforced: {_old} → {top2}")
+
     penalty       = _compute_entropy_penalty()
     effective_ent = ent - penalty
 
@@ -1063,7 +1168,7 @@ def _build_cached_pred(rewards, raw_rounds, brake):
               f"({ent:.4f}→{effective_ent:.4f})")
 
     penalty_forced = (penalty > 0 and ent >= eth and effective_ent < eth)
-    play = t1s > cur_top1_t and effective_ent < eth and brake == 0
+    play = _t1s_for_play > cur_top1_t and effective_ent < eth and brake == 0
 
     skip_reason = None
     if brake > 0:
@@ -1075,8 +1180,8 @@ def _build_cached_pred(rewards, raw_rounds, brake):
             skip_reason = f"High entropy ({ent:.4f} ≥ {eth:.3f})"
             if cluster_reduction > 0:
                 skip_reason += f" [cluster-{high_mult_count} reduced by {cluster_reduction:.2f}]"
-    elif t1s <= cur_top1_t:
-        skip_reason = f"Low confidence ({t1s:.4f} ≤ {cur_top1_t:.4f})"
+    elif _t1s_for_play <= cur_top1_t:
+        skip_reason = f"Low confidence ({_t1s_for_play:.4f} ≤ {cur_top1_t:.4f})"
 
     last_round = raw_rounds[-1]["round"] if raw_rounds else None
     next_round = (last_round + 1) if last_round else None
@@ -1194,7 +1299,7 @@ def _build_cached_pred(rewards, raw_rounds, brake):
         "_pattern_scores":    {g: pattern_snap.get(g, {}).get("score", 0.0)
                                for g in PATTERN_GROUPS},
         "_any_boosted":       pattern_snap.get("_any_triggered", False),
-        "_t1s":               t1s,
+        "_t1s":               _t1s_for_play,
         "_penalty_forced":    penalty_forced,
     }
 
@@ -1598,6 +1703,48 @@ def api_history():
         "name":  CLASS_NAMES.get(r["reward_index"],"?"),
         "color": CLASS_COLORS.get(r["reward_index"],"#888"),
     } for r in reversed(raw)])
+
+@app.route("/api/mode")
+def api_mode():
+    mode    = get_current_mode()
+    now     = datetime.now(IST)
+    total_s = now.hour * 3600 + now.minute * 60 + now.second
+    coolend_s = COOLDOWN_END_HOUR * 3600 + COOLDOWN_END_MINUTE * 60
+    live_s    = LIVE_START_HOUR   * 3600 + LIVE_START_MINUTE   * 60
+    reset_s   = RESET_HOUR_IST    * 3600 + RESET_MINUTE_IST    * 60
+
+    if mode == "cooldown":
+        secs_left    = coolend_s - total_s
+        target_label = f"{COOLDOWN_END_HOUR:02d}:{COOLDOWN_END_MINUTE:02d} IST"
+    elif mode == "warmup":
+        secs_left    = live_s - total_s
+        h12 = LIVE_START_HOUR if LIVE_START_HOUR <= 12 else LIVE_START_HOUR - 12
+        ampm = "AM" if LIVE_START_HOUR < 12 else "PM"
+        target_label = f"{h12}:{LIVE_START_MINUTE:02d} {ampm} IST"
+    else:
+        if total_s < reset_s:
+            secs_left = reset_s - total_s
+        else:
+            secs_left = (86400 - total_s) + reset_s
+        target_label = f"{RESET_HOUR_IST:02d}:{RESET_MINUTE_IST:02d} IST"
+
+    h12_live = LIVE_START_HOUR if LIVE_START_HOUR <= 12 else LIVE_START_HOUR - 12
+    ampm_live = "AM" if LIVE_START_HOUR < 12 else "PM"
+
+    return jsonify({
+        "mode":            mode,
+        "secs_left":       max(0, int(secs_left)),
+        "target_label":    target_label,
+        "live_hour":       LIVE_START_HOUR,
+        "live_minute":     LIVE_START_MINUTE,
+        "live_hour_12":    h12_live,
+        "live_ampm":       ampm_live,
+        "server_time_ist": now.strftime("%H:%M:%S IST"),
+    })
+
+@app.route("/api/prev_day")
+def api_prev_day():
+    return jsonify(_prev_day_fake())
 
 @app.route("/api/pattern")
 def api_pattern():
