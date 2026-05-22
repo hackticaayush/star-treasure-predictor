@@ -1026,7 +1026,7 @@ def get_bonus_picks(scores, top2):
         ),
         reverse=True
     )
-    bonus = [cls for cls in ev_ranked if cls not in top2]
+    bonus = [cls for cls in ev_ranked if cls not in top2 and cls not in (top3 if top3 else top2)]
 
     if not bonus:
         return None
