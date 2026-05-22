@@ -426,6 +426,7 @@ def recalibrate_markov_weights(hit_bufs):
 
 # ── DYNAMIC PATTERN PARAMS ────────────────────────────────────────────────────
 def recalibrate_pattern_params(total_rounds, sim_hit_rate):
+    global _dynamic_lookback, _dynamic_decay
     with _lock:
         cur_decay = _dynamic_decay
     new_lookback = 7  # fixed at 7
@@ -439,7 +440,6 @@ def recalibrate_pattern_params(total_rounds, sim_hit_rate):
         print(f"[PatternParam] Decay: {cur_decay:.3f}→{new_decay:.3f} "
               f"(sim_hit_rate={sim_hit_rate:.2%})")
     with _lock:
-        global _dynamic_lookback, _dynamic_decay
         _dynamic_lookback = new_lookback
         _dynamic_decay    = new_decay
 
