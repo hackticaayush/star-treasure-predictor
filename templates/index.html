@@ -283,6 +283,14 @@ body{font-family:'Nunito',sans-serif;min-height:100vh;background:#07052a;color:#
 .prev-results-title{font-family:'Lilita One',cursive;font-size:13px;color:var(--gold);letter-spacing:1px;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
 .prev-results-title::after{content:'';flex:1;height:1px;background:rgba(255,215,0,0.18);}
 .crafted-line{font-size:11px;color:rgba(255,215,0,0.55);font-weight:700;letter-spacing:0.5px;margin-top:6px;font-family:'Nunito',sans-serif;}
+.tech-card{background:rgba(6,4,32,0.82);border:1px solid rgba(0,229,255,0.18);border-radius:18px;padding:16px 14px;margin-bottom:10px;}
+.tech-title{font-family:'Lilita One',cursive;font-size:13px;color:var(--cyan);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.tech-title::after{content:'';flex:1;height:1px;background:rgba(0,229,255,0.15);}
+.tech-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.tech-item{background:rgba(0,229,255,0.05);border:1px solid rgba(0,229,255,0.12);border-radius:12px;padding:10px 8px;display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center;}
+.tech-icon{font-size:20px;line-height:1;}
+.tech-item span:last-child{font-size:11px;font-weight:800;color:rgba(255,255,255,0.75);line-height:1.3;}
+.tech-item small{font-size:9px;color:var(--muted);font-weight:700;letter-spacing:0.3px;}
 </style>
 </head>
 <body>
@@ -642,6 +650,25 @@ function buildWaitingHTML(modeData, prevDay) {
       <div class="wfp-lbl" style="color:${COLORS[i]}">${NAMES[i].replace(' Times','×')}</div>
     </div>`).join('');
 
+  const techHTML = `
+  <div class="tech-card">
+    <div class="tech-title">⚙️ Engine Techniques</div>
+    <div class="tech-grid">
+      <div class="tech-item"><span class="tech-icon">⚡</span><span>Markov Chains<br><small>Order 1–4</small></span></div>
+      <div class="tech-item"><span class="tech-icon">⚡</span><span>Shannon Entropy<br><small>Chaos Scoring</small></span></div>
+      <div class="tech-item"><span class="tech-icon">⚡</span><span>Bayesian Blending<br><small>Score Fusion</small></span></div>
+      <div class="tech-item"><span class="tech-icon">⚡</span><span>Pattern Decay<br><small>Recency Weighting</small></span></div>
+      <div class="tech-item"><span class="tech-icon">⚡</span><span>Dynamic Brake<br><small>Streak Protection</small></span></div>
+      <div class="tech-item"><span class="tech-icon">⚡</span><span>EV Scoring<br><small>Bonus Signals</small></span></div>
+      <div class="tech-item"><span class="tech-icon">⚡</span><span>Gap Analysis<br><small>Run-Length Stats</small></span></div>
+      <div class="tech-item"><span class="tech-icon">⚡</span><span>Walk-Forward Sim<br><small>Backtesting Engine</small></span></div>
+      <div class="tech-item"><span class="tech-icon">⚡</span><span>Noise Flattening<br><small>Chaos Suppression</small></span></div>
+      <div class="tech-item"><span class="tech-icon">⚡</span><span>Streak Boost<br><small>Regime Detection</small></span></div>
+      <div class="tech-item"><span class="tech-icon">⚡</span><span>Cluster Bonus<br><small>High-Mult Cascade</small></span></div>
+      <div class="tech-item"><span class="tech-icon">⚡</span><span>Adaptive Thresholds<br><small>Self-Calibrating</small></span></div>
+    </div>
+  </div>`;
+  
   let prevHTML = '';
   if (prevDay) {
     const acc = prevDay.accuracy || 0;
