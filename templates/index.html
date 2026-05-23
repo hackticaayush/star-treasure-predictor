@@ -138,10 +138,11 @@ body{font-family:'Nunito',sans-serif;min-height:100vh;background:#07052a;color:#
 
 /* Random mode arena badge */
 .rand-mode-arena-badge{
-  display:inline-flex;align-items:center;gap:7px;
+  display:flex;align-items:center;justify-content:center;gap:7px;
   background:rgba(255,152,0,0.12);border:1px solid rgba(255,152,0,0.38);
   border-radius:20px;padding:5px 14px;font-size:11px;font-weight:800;
   color:var(--orange);letter-spacing:1.5px;margin-bottom:13px;
+  width:fit-content;margin-left:auto;margin-right:auto;
   animation:randBadgeFade 2s ease-in-out infinite;
 }
 .rand-badge-dot{width:6px;height:6px;border-radius:50%;background:var(--orange);box-shadow:0 0 7px var(--orange);flex-shrink:0;}
@@ -738,37 +739,8 @@ function getRandomPred(pred) {
  * - the displayed predicted planets are replaced with the random mode picks
  *   i.e. the planets NOT in the original top2/top3
  */
-function randomizeLogEntry(r, pred) {
-  const scores = (pred && pred.all_scores) || {};
-  const ranked = Object.entries(scores)
-    .sort((a, b) => +b[1] - +a[1])
-    .map(([k]) => +k);
-
-  const origTop = r.top3 || r.top2 || [];
-  const origSet = new Set(origTop);
-  const others  = ranked.filter(p => !origSet.has(p));
-
-  // Build random picks same count as original
-  const count = origTop.length;
-  const randPicks = [];
-  for (let i = 0; i < count && i < others.length; i++) randPicks.push(others[i]);
-  // fallback if not enough others
-  while (randPicks.length < count) randPicks.push(ranked[randPicks.length] ?? origTop[randPicks.length]);
-
-  const entry = { ...r, hit: !r.hit };
-  if (r.top3) entry.top3 = randPicks;
-  else entry.top2 = randPicks;
-
-  // Bonus picks: also swap to non-original bonus planets
-  if (r.bonus_picks && r.bonus_picks.length) {
-    const origBonusSet = new Set(r.bonus_picks);
-    const otherHM = HIGH_MULT_IDS.filter(c => !origBonusSet.has(c));
-    entry.bonus_picks = otherHM.length > 0
-      ? otherHM.slice(0, r.bonus_picks.length)
-      : [...r.bonus_picks].reverse();
-  }
-
-  return entry;
+function randomizeLogEntry(r) {
+  return { ...r, hit: !r.hit };
 }
 
 let _waitCdInterval = null;
@@ -972,7 +944,7 @@ function buildUI(pred, stats, history, status) {
 
   const abanner = `
     <div class="abanner ${isPlay?'play':'skip'}">
-      <div class="aicon">${isPlay?'--':'>>'}</div>
+      <div class="aicon">${isPlay?'✅':'⏭'}</div>
       <div>
         <div>${isPlay?'PLAY THIS ROUND':'SKIP THIS ROUND'}</div>
         <div class="asub">${bannerSub}</div>
