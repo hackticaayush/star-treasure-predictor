@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Treasure AI</title>
 
-<link rel="manifest" href="/pwa/manifest.json">
+<link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#07052a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1154,7 +1154,7 @@ function buildUI(pred, stats, history, status) {
 }
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/pwa/sw.js', { scope: '/' }).catch(console.warn);
+  navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(console.warn);
 }
 
 boot();
