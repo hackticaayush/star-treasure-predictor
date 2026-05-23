@@ -1784,6 +1784,12 @@ def serve_manifest():
     return Response(content, mimetype="application/manifest+json",
                     headers={"Cache-Control": "no-cache"})
 
+from flask import send_from_directory
+
+@app.route("/pwa/<path:filename>")
+def serve_pwa(filename):
+    return send_from_directory('pwa', filename)
+
 # ── API ROUTES ────────────────────────────────────────────────────────────────
 
 @app.route("/")
