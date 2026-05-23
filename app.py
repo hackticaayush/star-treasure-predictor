@@ -194,10 +194,10 @@ SKIP_ANTI_OVERRIDE   = True
 import random as _random
 
 HMCR_RULES = {
-    7: {"fixed": [3],    "random_pool": [2, 4], "random_pick": 1, "rounds": 5},
-    3: {"fixed": [2, 4], "random_pool": [],      "random_pick": 0, "rounds": 5},
-    4: {"fixed": [4, 2], "random_pool": [],      "random_pick": 0, "rounds": 3},
-    2: {"fixed": [2],    "random_pool": [],      "random_pick": 0, "rounds": 2},
+    7: {"fixed": [3, 2], "random_pool": [], "random_pick": 0, "rounds": 4},  # 50x → 25x+10x for 4 rounds
+    3: {"fixed": [4, 2], "random_pool": [], "random_pick": 0, "rounds": 3},  # 25x → 15x+10x for 3 rounds
+    4: {"fixed": [4, 2], "random_pool": [], "random_pick": 0, "rounds": 2},  # 15x → 15x+10x for 2 rounds
+    2: {"fixed": [2],    "random_pool": [], "random_pick": 0, "rounds": 2},
 }
 HMCR_PRIORITY = [7, 3, 4, 2]   # highest priority first
 
@@ -1291,11 +1291,10 @@ def get_bonus_picks(scores, top2):
     # ── HMCR: deterministic rule first ───────────────────────────────────────
     hmcr_bonus, hmcr_trigger = hmcr_get_bonus()
     if hmcr_bonus:
-        # Filter out any that happen to be in top2
-        filtered = [c for c in hmcr_bonus if c not in top2]
-        if filtered:
-            print(f"[HMCR] Bonus override: {[CLASS_NAMES.get(c,'?') for c in filtered]}")
-            return filtered[:2]
+        # FORCED override — show all HMCR picks in bonus regardless of score logic
+        # Do NOT filter by top2 overlap since bonus section is separate
+        print(f"[HMCR] FORCED Bonus override: {[CLASS_NAMES.get(c,'?') for c in hmcr_bonus]}")
+        return hmcr_bonus[:2]
 
     # ── Fallback: score-based EV bonus ───────────────────────────────────────
     with _lock: thresh = _dynamic_bonus_thresh
