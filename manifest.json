@@ -6,21 +6,27 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#07052a",
+  "background_color": "#5b2d9e",
   "theme_color": "#07052a",
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "https://m.starmakerstudios.com/cdn/vue/agile-vue3/views/spa-rhapsody-music/web-sync/img/new/ball/ball7-fa9cf.png",
+      "src": "/pwa/icon.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "https://m.starmakerstudios.com/cdn/vue/agile-vue3/views/spa-rhapsody-music/web-sync/img/new/ball/ball7-fa9cf.png",
+      "src": "/pwa/icon.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
