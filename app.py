@@ -1061,13 +1061,14 @@ def hmcr_check_trigger(rewards):
 
     with _lock:
         existing = _hmcr_state
-        # Only re-trigger if a higher-priority class appeared
+        # Only block if a HIGHER priority class is already active
         if (existing["rounds_left"] > 0 and existing["trigger"] is not None):
             cur_prio = HMCR_PRIORITY.index(existing["trigger"])
             new_prio = HMCR_PRIORITY.index(triggered_cls)
-            if new_prio >= cur_prio:
-                # Same or lower priority — don't override
+            if new_prio > cur_prio:
+                # Lower priority than active — don't override
                 return
+            # Same or higher priority — always re-trigger with fresh bonus+rounds
 
         _hmcr_state = {
             "trigger":    triggered_cls,
