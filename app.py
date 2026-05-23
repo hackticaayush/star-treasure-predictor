@@ -1402,16 +1402,21 @@ def _build_cached_pred(rewards, raw_rounds, brake):
 
     _t1s_for_play = t1s
     _LOW_MULT     = {1, 5, 6, 8}
-    if any(c not in _LOW_MULT for c in top2):
-        _rk = sorted(scores.items(), key=lambda x: -x[1])
-        _sm = [k for k, v in _rk if k in _LOW_MULT]
-        if len(_sm) >= 2:
-            _old = list(top2); top2 = [_sm[0], _sm[1]]
-            t1s  = scores.get(top2[0], t1s); t2s = scores.get(top2[1], t2s)
-            _used = set(top2)
-            _rest = [(k, v) for k, v in _rk if k not in _used]
-            t3c = _rest[0][0] if _rest else None; t3s = _rest[0][1] if _rest else 0.0
-            print(f"[LowMult] Display enforced: {_old} → {top2}")
+    # Always enforce: top2 and pred3 must ONLY be low-mult planets (1,5,6,8)
+    # High-mult (2,3,4,7) must ONLY appear in bonus section
+    _rk = sorted(scores.items(), key=lambda x: -x[1])
+    _sm = [k for k, v in _rk if k in _LOW_MULT]
+    _old_top2 = list(top2)
+    if len(_sm) >= 2:
+        top2 = [_sm[0], _sm[1]]
+        t1s  = scores.get(top2[0], t1s); t2s = scores.get(top2[1], t2s)
+    _used = set(top2)
+    # t3c must also be low-mult only
+    _sm_rest = [(k, v) for k, v in _rk if k in _LOW_MULT and k not in _used]
+    t3c = _sm_rest[0][0] if _sm_rest else None
+    t3s = _sm_rest[0][1] if _sm_rest else 0.0
+    if _old_top2 != top2:
+        print(f"[LowMult] Display enforced: {_old_top2} → {top2}")
 
     penalty       = _compute_entropy_penalty()
     effective_ent = ent - penalty
