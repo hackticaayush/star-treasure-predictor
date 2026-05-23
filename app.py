@@ -1769,7 +1769,7 @@ def fetcher_loop():
 #  PWA ROUTES
 # ══════════════════════════════════════════════════════════════════════════════
 
-@app.route("/pwa/sw.js")
+@app.route("/sw.js")
 def serve_sw():
     sw_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sw.js")
     with open(sw_path, "r") as f: content = f.read()
@@ -1777,7 +1777,7 @@ def serve_sw():
                     headers={"Service-Worker-Allowed": "/",
                              "Cache-Control": "no-cache, no-store, must-revalidate"})
 
-@app.route("/pwa/manifest.json")
+@app.route("/manifest.json")
 def serve_manifest():
     manifest_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "manifest.json")
     with open(manifest_path, "r") as f: content = f.read()
