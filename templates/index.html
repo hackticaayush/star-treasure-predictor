@@ -104,12 +104,62 @@ body{font-family:'Nunito',sans-serif;min-height:100vh;background:#07052a;color:#
 .pill-cd{background:rgba(0,0,0,0.3);border-radius:20px;padding:2px 8px;font-size:11px;color:rgba(255,255,255,0.45);font-family:'Share Tech Mono',monospace;}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
 
+/* ── MODE TOGGLE BUTTON ─────────────────────────────────────────────────── */
+.mode-toggle-wrap{display:flex;justify-content:center;margin:10px 0 4px;}
+.mode-toggle{
+  display:inline-flex;align-items:center;gap:9px;
+  padding:10px 24px;border-radius:30px;border:1.5px solid;
+  cursor:pointer;font-family:'Lilita One',cursive;font-size:14px;letter-spacing:1.5px;
+  transition:all .35s cubic-bezier(.4,0,.2,1);
+  position:relative;overflow:hidden;outline:none;
+}
+.mode-toggle::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(255,255,255,0.08) 0%,transparent 60%);
+  pointer-events:none;
+}
+.mode-toggle:active{transform:scale(0.95);}
+.mode-toggle.m-orig{
+  background:rgba(0,229,255,0.07);
+  border-color:rgba(0,229,255,0.38);
+  color:var(--cyan);
+  box-shadow:0 0 18px rgba(0,229,255,0.08),inset 0 0 12px rgba(0,229,255,0.04);
+}
+.mode-toggle.m-rand{
+  background:linear-gradient(135deg,rgba(255,152,0,0.22),rgba(255,68,68,0.14));
+  border-color:rgba(255,152,0,0.65);
+  color:var(--orange);
+  animation:randglow 2s ease-in-out infinite;
+}
+.mode-toggle-icon{font-size:18px;line-height:1;display:inline-block;transition:transform .4s ease;}
+.mode-toggle.m-rand .mode-toggle-icon{animation:dicespín 3s linear infinite;}
+@keyframes dicespín{0%{transform:rotate(0deg);}25%{transform:rotate(15deg);}50%{transform:rotate(0deg);}75%{transform:rotate(-15deg);}100%{transform:rotate(0deg);}}
+@keyframes randglow{
+  0%,100%{box-shadow:0 0 18px rgba(255,152,0,0.28),0 0 45px rgba(255,152,0,0.1),inset 0 0 16px rgba(255,152,0,0.06);}
+  50%{box-shadow:0 0 36px rgba(255,152,0,0.55),0 0 70px rgba(255,152,0,0.2),inset 0 0 24px rgba(255,152,0,0.12);}
+}
+
+/* Random mode arena badge */
+.rand-mode-arena-badge{
+  display:inline-flex;align-items:center;gap:7px;
+  background:rgba(255,152,0,0.12);border:1px solid rgba(255,152,0,0.38);
+  border-radius:20px;padding:5px 14px;font-size:11px;font-weight:800;
+  color:var(--orange);letter-spacing:1.5px;margin-bottom:13px;
+  animation:randBadgeFade 2s ease-in-out infinite;
+}
+.rand-badge-dot{width:6px;height:6px;border-radius:50%;background:var(--orange);box-shadow:0 0 7px var(--orange);flex-shrink:0;}
+@keyframes randBadgeFade{0%,100%{opacity:1;}50%{opacity:0.5;}}
+
+/* ── END MODE TOGGLE ────────────────────────────────────────────────────── */
+
 .card{background:var(--card);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid var(--cbord);border-radius:var(--r);padding:16px;margin-bottom:10px;box-shadow:0 8px 36px rgba(0,0,0,0.5);}
 .ctitle{font-family:'Lilita One',cursive;font-size:13px;letter-spacing:1.5px;color:var(--gold);text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
 .ctitle::after{content:'';flex:1;height:1px;background:rgba(255,215,0,0.18);}
 
 .arena{background:rgba(6,4,32,0.82);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);border:1px solid rgba(160,100,255,0.22);border-radius:22px;padding:16px 14px 18px;margin-bottom:10px;box-shadow:0 0 70px rgba(110,50,255,0.14),0 8px 40px rgba(0,0,0,0.65);position:relative;overflow:hidden;}
 .arena::before{content:'';position:absolute;inset:0;border-radius:22px;background:radial-gradient(ellipse 80% 55% at 50% 0%,rgba(150,70,255,0.09) 0%,transparent 65%);pointer-events:none;}
+.arena.rand-arena{border-color:rgba(255,152,0,0.3);box-shadow:0 0 70px rgba(255,120,0,0.12),0 8px 40px rgba(0,0,0,0.65);}
+.arena.rand-arena::before{background:radial-gradient(ellipse 80% 55% at 50% 0%,rgba(255,120,0,0.08) 0%,transparent 65%);}
 
 .rrow{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
 .rnum{font-family:'Lilita One',cursive;font-size:22px;color:var(--gold);text-shadow:0 0 18px rgba(255,215,0,0.5);}
@@ -364,6 +414,13 @@ body{font-family:'Nunito',sans-serif;min-height:100vh;background:#07052a;color:#
         <span class="cdot"></span>
         <span style="font-size:11px;color:var(--muted);">Refresh in <span class="pill-cd"><span id="cdNum">5</span>s</span></span>
       </div>
+      <!-- ── MODE TOGGLE BUTTON ── -->
+      <div class="mode-toggle-wrap">
+        <button class="mode-toggle m-orig" id="modeToggleBtn" onclick="toggleMode()">
+          <span class="mode-toggle-icon" id="modeToggleIcon">🔮</span>
+          <span id="modeToggleText">Original Mode</span>
+        </button>
+      </div>
       <div class="crafted-line">Crafted by Ayansh ✨</div>
     </div>
     <div id="app">
@@ -392,7 +449,6 @@ function showScreen(id) {
   appEl.classList.remove('active');
   if (id === 's-app') {
     appEl.style.display = 'flex';
-    // small delay so display:flex takes effect before opacity transition
     requestAnimationFrame(() => appEl.classList.add('active'));
   } else {
     const el = document.getElementById(id);
@@ -519,7 +575,6 @@ function showUUIDScreen(uuid) {
   showScreen('s-uuid');
   document.getElementById('uuidDisplay').textContent = uuid;
   const copyBtn = document.getElementById('copyBtn');
-  // remove old listeners by cloning
   const fresh = copyBtn.cloneNode(true);
   copyBtn.parentNode.replaceChild(fresh, copyBtn);
   fresh.addEventListener('click', async () => {
@@ -560,7 +615,6 @@ function initInstallFlow() {
     return;
   }
 
-  // Listen for the install prompt — may fire immediately or after several seconds
   window.addEventListener('beforeinstallprompt', e => {
     e.preventDefault();
     deferredPrompt = e;
@@ -585,13 +639,11 @@ function initInstallFlow() {
         btn.disabled = true;
       }
     } else {
-      // Fallback: guide to manual install
       btn.innerHTML = '<span>⋮</span> Use Menu → Add to Home Screen';
       btn.style.opacity = '0.7';
     }
   });
 
-  // After 4 seconds, if prompt still hasn't fired, enable button with manual fallback
   setTimeout(() => {
     if (!_installPromptReady) {
       btn.innerHTML = '<span>⋮</span> Use Menu → Add to Home Screen';
@@ -614,10 +666,126 @@ const BALL = {
 };
 const NAMES  = {1:'Purple',2:'10 Times',3:'25 Times',4:'15 Times',5:'Yellow',6:'Light Green',7:'50 Times',8:'Dark Green'};
 const COLORS = {1:'#c084fc',2:'#f87171',3:'#fb923c',4:'#facc15',5:'#fde047',6:'#4ade80',7:'#22d3ee',8:'#22c55e'};
+const HIGH_MULT_IDS = [2, 3, 4, 7];
 
 const fmt = n => n != null ? n.toLocaleString() : '—';
 const img = (idx, cls='', sty='') =>
   `<img src="${BALL[idx]||''}" alt="${NAMES[idx]||idx}" class="${cls}" style="${sty}" loading="lazy" onerror="this.style.opacity='.3'">`;
+
+// ── RANDOM MODE STATE ─────────────────────────────────────────────────────────
+let isRandomMode = false;
+let _lastUIData  = null;   // [pred, stats, history, status]
+
+function toggleMode() {
+  isRandomMode = !isRandomMode;
+  const btn  = document.getElementById('modeToggleBtn');
+  const icon = document.getElementById('modeToggleIcon');
+  const txt  = document.getElementById('modeToggleText');
+  if (isRandomMode) {
+    btn.className  = 'mode-toggle m-rand';
+    icon.textContent = '🎲';
+    txt.textContent  = 'Random Mode';
+  } else {
+    btn.className  = 'mode-toggle m-orig';
+    icon.textContent = '🔮';
+    txt.textContent  = 'Original Mode';
+  }
+  // Re-render immediately with cached data
+  if (_lastUIData) buildUI(..._lastUIData);
+}
+
+/**
+ * Transform a prediction object into Random Mode picks.
+ * Rules:
+ *  - SKIP → pass through unchanged (same skip reason)
+ *  - Top-2 mode: show the next 2 highest-scoring planets NOT in original top-2
+ *  - Top-3 mode: 1 new planet (highest not in original) + original pred2 + pred3 (mix)
+ *  - Bonus: if original has bonus picks, show HIGH_MULT planets NOT in that bonus list
+ *           if original has no bonus, random also has no bonus
+ */
+function getRandomPred(pred) {
+  // SKIP passes through as-is
+  if (pred.action === 'SKIP') return { ...pred, _isRandom: true };
+
+  const scores = pred.all_scores || {};
+
+  // Sort all 8 planets by score descending
+  const ranked = Object.entries(scores)
+    .sort((a, b) => +b[1] - +a[1])
+    .map(([k]) => +k);
+
+  const hasPred3  = pred.pred3 != null;
+  const origPicks = new Set([pred.pred1, pred.pred2]);
+  if (hasPred3) origPicks.add(pred.pred3);
+
+  // Planets NOT in original picks, sorted by score
+  const others = ranked.filter(p => !origPicks.has(p));
+
+  const rp = { ...pred, _isRandom: true };
+
+  if (!hasPred3) {
+    // ── Top-2 random: both picks are "other" planets ──────────────────────
+    rp.pred1 = others[0] ?? ranked[0];
+    rp.pred2 = others[1] ?? ranked[1];
+    rp.pred3 = null;
+  } else {
+    // ── Top-3 random: 1 new planet + 2 from original (pred2, pred3) ──────
+    // "another missing planet" = others[0] (new)
+    // "two non-missing planets" = pred.pred2, pred.pred3 (kept from original)
+    rp.pred1 = others[0] ?? ranked[0];
+    rp.pred2 = pred.pred2;   // kept from original
+    rp.pred3 = pred.pred3;   // kept from original
+  }
+
+  // Sync name/color/conf fields
+  [1, 2, 3].forEach(n => {
+    const p = rp[`pred${n}`];
+    if (p != null) {
+      rp[`pred${n}_name`]  = NAMES[p]  || String(p);
+      rp[`pred${n}_color`] = COLORS[p] || '#fff';
+      rp[`pred${n}_conf`]  = +((scores[p] || 0) * 100).toFixed(2);
+    } else {
+      rp[`pred${n}_name`]  = null;
+      rp[`pred${n}_color`] = null;
+      rp[`pred${n}_conf`]  = null;
+    }
+  });
+
+  // ── Bonus: show HIGH_MULT planets NOT in original bonus ─────────────────
+  const origBonusIds = new Set((pred.bonus_picks || []).map(b => b.idx));
+  const hasOrigBonus = pred.bonus_picks && pred.bonus_picks.length > 0;
+
+  if (hasOrigBonus) {
+    const otherHM = HIGH_MULT_IDS.filter(c => !origBonusIds.has(c));
+    if (otherHM.length > 0) {
+      rp.bonus_picks = otherHM.slice(0, 2).map(idx => ({
+        idx,
+        name:         NAMES[idx]  || String(idx),
+        color:        COLORS[idx] || '#ff9800',
+        conf:         +((scores[idx] || 0) * 100).toFixed(2),
+        ev:           0,
+        ev_triggered: false,
+      }));
+    } else {
+      // All high-mult already in original — reverse order so it's different
+      rp.bonus_picks = [...pred.bonus_picks].reverse();
+    }
+  }
+  // If original has no bonus: random also has no bonus (rp.bonus_picks stays same — null/undefined)
+
+  // skip_show_bonus_only follows original logic
+  return rp;
+}
+
+/**
+ * For live-log entries in random mode:
+ * "Hit" in random mode = the actual planet was NOT in the original picks
+ * (i.e., original MISS → random HIT, original HIT → random MISS).
+ * This reflects that in random mode you're picking the "opposite" planets.
+ */
+function randomizeLogEntry(r) {
+  return { ...r, hit: !r.hit };
+}
 
 // ── WAITING SCREEN ───────────────────────────────────────────────────────────
 let _waitCdInterval = null;
@@ -629,14 +797,6 @@ function buildWaitingHTML(modeData, prevDay) {
   const h12  = modeData.live_hour_12 || 4;
   const ampm = modeData.live_ampm    || 'PM';
   const lm   = String(modeData.live_minute || 0).padStart(2,'0');
-
-  const modeBadge = isCooldown ? '🌙 SYSTEM COOLDOWN' : '⏳ WARMING UP';
-  const waitTitle = isCooldown
-    ? 'Analysis Begins at 08:30 AM'
-    : `Game Starts at ${h12}:${lm} ${ampm} IST`;
-  const waitSub = isCooldown
-    ? 'Daily reset complete · Loading historical data'
-    : 'Everything is being prepared · Get ready to play!';
 
   const secs = modeData.secs_left || 0;
   const hh = String(Math.floor(secs / 3600)).padStart(2,'0');
@@ -668,7 +828,7 @@ function buildWaitingHTML(modeData, prevDay) {
       <div class="tech-item"><span class="tech-icon">⚡</span><span>Adaptive Thresholds<br><small>Self-Calibrating</small></span></div>
     </div>
   </div>`;
-  
+
   let prevHTML = '';
   if (prevDay) {
     const acc = prevDay.accuracy || 0;
@@ -755,7 +915,7 @@ function startWaitCountdown(secsLeft) {
     if (rem === 0) {
       clearInterval(_waitCdInterval);
       _waitCdInterval = null;
-      _currentMode = null; // force re-render on next tick
+      _currentMode = null;
     }
   }, 1000);
 }
@@ -826,23 +986,29 @@ function launchApp() {
 
 // ── BUILD UI ─────────────────────────────────────────────────────────────────
 function buildUI(pred, stats, history, status) {
-  const isPlay = pred.action === 'PLAY';
-  const bonus  = pred.bonus_picks || null;
-  const skipBonusOnly = pred.skip_show_bonus_only === true;
-  const p1=pred.pred1, p2=pred.pred2, p3=pred.pred3||null;
+  // Cache for mode toggle re-render
+  _lastUIData = [pred, stats, history, status];
+
+  // ── Apply Random Mode transformation ──────────────────────────────────────
+  const dp = isRandomMode ? getRandomPred(pred) : pred;
+
+  const isPlay       = dp.action === 'PLAY';
+  const bonus        = dp.bonus_picks || null;
+  const skipBonusOnly = dp.skip_show_bonus_only === true;
+  const p1=dp.pred1, p2=dp.pred2, p3=dp.pred3||null;
   const c1=COLORS[p1]||'#fff', c2=COLORS[p2]||'#fff', c3=p3?(COLORS[p3]||'#fff'):null;
   const has3 = isPlay && p3 != null;
 
   const nr = status && status.next_reset_in;
   const roundHdr = `
     <div class="rrow">
-      <div class="rnum">#${fmt(pred.next_round)}</div>
+      <div class="rnum">#${fmt(dp.next_round)}</div>
       ${nr ? `<div class="reset-pill">Reset ${nr}</div>` : ''}
     </div>`;
 
   let bannerSub = '';
   if (isPlay) { bannerSub = has3 ? 'Choose any planet below' : 'Choose either planet below'; }
-  else { bannerSub = pred.skip_reason || ''; }
+  else { bannerSub = dp.skip_reason || ''; }
 
   const abanner = `
     <div class="abanner ${isPlay?'play':'skip'}">
@@ -852,6 +1018,11 @@ function buildUI(pred, stats, history, status) {
         <div class="asub">${bannerSub}</div>
       </div>
     </div>`;
+
+  // Random mode badge shown inside arena
+  const randBadgeHTML = isRandomMode
+    ? `<div class="rand-mode-arena-badge"><span class="rand-badge-dot"></span>🎲 RANDOM MODE · OPPOSITE PICKS</div>`
+    : '';
 
   let picksHTML = '';
   if (!skipBonusOnly) {
@@ -865,7 +1036,7 @@ function buildUI(pred, stats, history, status) {
             ${img(p1,`planet-img ${sm}`,`filter:drop-shadow(0 0 16px ${c1})`)}
           </div>
           <div class="pname ${sm}" style="color:${c1}">${NAMES[p1]||p1}</div>
-          <div class="pconf">${pred.pred1_conf||0}%</div>
+          <div class="pconf">${dp.pred1_conf||0}%</div>
         </div>
         <div class="picks-or ${sm}">OR</div>
         <div class="ppick">
@@ -875,7 +1046,7 @@ function buildUI(pred, stats, history, status) {
             ${img(p2,`planet-img d1 ${sm}`,`filter:drop-shadow(0 0 16px ${c2})`)}
           </div>
           <div class="pname ${sm}" style="color:${c2}">${NAMES[p2]||p2}</div>
-          <div class="pconf">${pred.pred2_conf||0}%</div>
+          <div class="pconf">${dp.pred2_conf||0}%</div>
         </div>
         ${has3 ? `
         <div class="picks-or ${sm}">OR</div>
@@ -886,7 +1057,7 @@ function buildUI(pred, stats, history, status) {
             ${img(p3,`planet-img d2 ${sm}`,`filter:drop-shadow(0 0 16px ${c3})`)}
           </div>
           <div class="pname ${sm}" style="color:${c3}">${NAMES[p3]||p3}</div>
-          <div class="pconf">${pred.pred3_conf||0}%</div>
+          <div class="pconf">${dp.pred3_conf||0}%</div>
         </div>` : ''}
       </div>`;
   }
@@ -923,16 +1094,16 @@ function buildUI(pred, stats, history, status) {
       </div>`;
   }
 
-  const ep  = Math.min(100,(pred.entropy/3)*100);
-  const ec  = pred.entropy<2?'#00e676':pred.entropy<2.7?'#facc15':'#ff4444';
+  const ep  = Math.min(100,(dp.entropy/3)*100);
+  const ec  = dp.entropy<2?'#00e676':dp.entropy<2.7?'#facc15':'#ff4444';
   const tp  = (2.7/3)*100;
-  const l10 = (pred.last_10||[]).map(n=>{
+  const l10 = (dp.last_10||[]).map(n=>{
     const c=COLORS[n]||'#fff';
     return `<span class="l10b" style="background:${c}22;color:${c}">${n}</span>`;
   }).join('');
   const entropy = `
     <div>
-      <div class="entrow"><span>Entropy</span><span class="entval" style="color:${ec}">${pred.entropy}</span></div>
+      <div class="entrow"><span>Entropy</span><span class="entval" style="color:${ec}">${dp.entropy}</span></div>
       <div class="enttrack">
         <div class="entfill" style="width:${ep}%;background:${ec}"></div>
         <div class="entmark" style="left:${tp}%"></div>
@@ -940,9 +1111,10 @@ function buildUI(pred, stats, history, status) {
       <div class="last10"><span class="l10lbl">LAST 10 ›</span>${l10}</div>
     </div>`;
 
+  // Score breakdown: uses ORIGINAL all_scores but highlights dp picks
   const p3set = p3 ? new Set([p3]) : new Set();
   const bset  = new Set((bonus||[]).map(b=>b.idx));
-  const scores = Object.entries(pred.all_scores||{})
+  const scores = Object.entries(dp.all_scores||{})
     .sort((a,b)=>b[1]-a[1])
     .map(([idx,sc])=>{
       const i=+idx, c=COLORS[i]||'#fff', nm=NAMES[i]||idx;
@@ -972,7 +1144,10 @@ function buildUI(pred, stats, history, status) {
     </div>`;
   }).join('');
 
-  const le=(stats.live_log||[]).slice().reverse();
+  // ── Live log: invert hit/miss in random mode ─────────────────────────────
+  const leRaw = (stats.live_log||[]).slice().reverse();
+  const le    = isRandomMode ? leRaw.map(r => randomizeLogEntry(r)) : leRaw;
+
   const lh=le.filter(r=>r.hit).length, lm=le.length-lh;
   const la=le.length?(lh/le.length*100).toFixed(1):null;
   let cl=0,ct='';
@@ -989,8 +1164,9 @@ function buildUI(pred, stats, history, status) {
     </div>` : `<div style="text-align:center;padding:18px;color:var(--muted);font-size:13px;">No live results yet</div>`;
 
   const lrows=le.map(r=>{
+    // Show original top2/top3 balls for context, but hit/miss reflects random mode
     const rowTop3 = r.top3 || r.top2;
-    const predBalls = rowTop3.map((b,i) => {
+    const predBalls = (rowTop3||[]).map((b,i) => {
       const cls = i >= 2 ? 'rball p3ball' : 'rball';
       return `<div class="${cls}">${img(b,'','width:22px;height:22px;object-fit:contain')}</div>`;
     });
@@ -1012,17 +1188,20 @@ function buildUI(pred, stats, history, status) {
   const fe = status&&status.status==='error';
   const err = fe?`<div class="errbanner"><div class="errt">⚠ API Error — data may be stale</div><div class="errm">${status.last_error||''}</div></div>`:'';
 
+  // Arena class changes in random mode
+  const arenaClass = isRandomMode ? 'arena rand-arena' : 'arena';
+
   document.getElementById('app').innerHTML=`
     ${err}
-    <div class="arena">
-      ${roundHdr}${abanner}${picksHTML}${bonusHTML}${entropy}
+    <div class="${arenaClass}">
+      ${roundHdr}${randBadgeHTML}${abanner}${picksHTML}${bonusHTML}${entropy}
     </div>
     ${hist?`<div class="card"><div class="ctitle">Recent History</div><div class="hstrip">${hist}</div></div>`:''}
     <div class="card"><div class="ctitle">Score Breakdown</div>${scores}</div>
-    <div class="card"><div class="ctitle">Live Results Stats</div>${liveStats}</div>
+    <div class="card"><div class="ctitle">${isRandomMode?'🎲 Random':'Live'} Results Stats</div>${liveStats}</div>
     ${le.length?`<div class="card" style="padding-bottom:0">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div class="ctitle" style="margin:0">Live Results</div>
+        <div class="ctitle" style="margin:0">${isRandomMode?'🎲 Random':'Live'} Results</div>
         <span style="font-size:10px;color:var(--muted);font-family:'Share Tech Mono',monospace">${le.length} rounds</span>
       </div>
       <div class="chips">
@@ -1030,17 +1209,18 @@ function buildUI(pred, stats, history, status) {
         <span class="chip cr">✗ ${lm} Misses</span>
         ${la!==null?`<span class="chip cb">${la}% Acc</span>`:''}
         ${cl>1?`<span class="chip co">${ct==='W'?'🔥':'❄'} ${cl} ${ct==='W'?'Win':'Loss'}</span>`:''}
+        ${isRandomMode?`<span class="chip co">🎲 Random</span>`:''}
       </div>
       <div class="lscroll"><div class="rlist">${lrows}</div></div>
     </div>`:''}
-    <div class="disc">PREDICTIONS ARE PROBABILISTIC · NOT FINANCIAL ADVICE</div>`;
+    <div class="disc">${isRandomMode?'🎲 RANDOM MODE ACTIVE · OPPOSITE PICKS SHOWN · ':''}PREDICTIONS ARE PROBABILISTIC · NOT FINANCIAL ADVICE</div>`;
 
   cdEl = document.getElementById('cdNum');
-  if (lastRound && pred.latest_round > lastRound) {
+  if (lastRound && dp.latest_round > lastRound) {
     const el = document.querySelector('.arena');
-    if (el) { el.style.boxShadow='0 0 70px rgba(255,215,0,0.22)'; setTimeout(()=>el.style.boxShadow='',2200); }
+    if (el) { el.style.boxShadow=isRandomMode?'0 0 70px rgba(255,152,0,0.28)':'0 0 70px rgba(255,215,0,0.22)'; setTimeout(()=>el.style.boxShadow='',2200); }
   }
-  lastRound = pred.latest_round;
+  lastRound = dp.latest_round;
 }
 
 // ── SERVICE WORKER ───────────────────────────────────────────────────────────
