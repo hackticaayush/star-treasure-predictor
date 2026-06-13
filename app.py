@@ -51,7 +51,7 @@ FETCH_BASE    = "https://m.starmakerstudios.com/go-v1/ssc/2711/records?start_rou
 FETCH_HEADERS = {
     'User-Agent': "sm/9.9.4/Android/13/google play/d48399ffafa2d343/wifi/en-IN/SM-M325F/10977524107285207///India",
     'Accept':     "application/json, text/plain, */*",
-    'Cookie':     "PHPSESSID=pd6mapbqfhbk3e7argj51uh1ts; oauth_token=94le54aFnKy5CrbNzo7s903FOWniysVT"
+    'Cookie':     "PHPSESSID=pd6mapbqfhbk3e7argj51uh1ts; oauth_token=eLRzRdFcdG6lnE1ISFry3zjrQJFyWbVx"
 }
 
 # ── PATTERN DETECTION CONFIG ──────────────────────────────────────────────────
